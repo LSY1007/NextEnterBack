@@ -17,7 +17,7 @@ public class JWTUtil {
     private static final String key = "1234567890123456789012345678901234567890";
 
     // JWT 토큰 생성
-    public String generateToken(Map<String, Object> valueMap, int minutes) {
+    public static String generateToken(Map<String, Object> valueMap, int minutes) {
         SecretKey secretKey = null;
         try {
             secretKey = Keys.hmacShaKeyFor(key.getBytes("UTF-8"));

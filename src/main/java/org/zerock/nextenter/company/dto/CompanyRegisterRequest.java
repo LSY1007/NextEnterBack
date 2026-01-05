@@ -1,4 +1,4 @@
-package org.zerock.codequery.company.dto;
+package org.zerock.nextenter.company.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;

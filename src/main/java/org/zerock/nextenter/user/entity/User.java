@@ -1,4 +1,4 @@
-package org.zerock.codequery.user.entity;
+package org.zerock.nextenter.user.entity;
 
 import jakarta.persistence.*;
 import lombok.*;

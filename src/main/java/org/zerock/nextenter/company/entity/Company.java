@@ -1,6 +1,6 @@
-package org.zerock.codequery.company.entity;
+package org.zerock.nextenter.company.entity;
 
-import org.zerock.codequery.user.entity.User;
+import org.zerock.nextenter.user.entity.User;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;

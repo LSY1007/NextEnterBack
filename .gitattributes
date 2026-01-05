@@ -7,6 +7,14 @@
 *.xml text
 *.yml text
 *.yaml text
+* text=auto
+
+# Java source files
+*.java text diff=java
+*.properties text
+*.xml text
+*.yml text
+*.yaml text
 
 # Gradle files
 *.gradle text

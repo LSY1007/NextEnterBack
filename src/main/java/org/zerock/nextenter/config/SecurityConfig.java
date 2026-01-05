@@ -1,4 +1,4 @@
-package org.zerock.codequery.config;
+package org.zerock.nextenter.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

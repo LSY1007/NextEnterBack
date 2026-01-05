@@ -1,11 +1,11 @@
-package org.zerock.codequery.company.service;
+package org.zerock.nextenter.company.service;
 
-import org.zerock.codequery.company.dto.CompanyRegisterRequest;
-import org.zerock.codequery.company.dto.CompanyResponse;
-import org.zerock.codequery.company.entity.Company;
-import org.zerock.codequery.company.repository.CompanyRepository;
-import org.zerock.codequery.user.entity.User;
-import org.zerock.codequery.user.repository.UserRepository;
+import org.zerock.nextenter.company.dto.CompanyRegisterRequest;
+import org.zerock.nextenter.company.dto.CompanyResponse;
+import org.zerock.nextenter.company.entity.Company;
+import org.zerock.nextenter.company.repository.CompanyRepository;
+import org.zerock.nextenter.user.entity.User;
+import org.zerock.nextenter.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

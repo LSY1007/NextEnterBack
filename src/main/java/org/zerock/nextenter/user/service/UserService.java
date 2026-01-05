@@ -1,9 +1,9 @@
-package org.zerock.codequery.user.service;
+package org.zerock.nextenter.user.service;
 
-import org.zerock.codequery.user.DTO.SignupRequest;
-import org.zerock.codequery.user.DTO.SignupResponse;
-import org.zerock.codequery.user.entity.User;
-import org.zerock.codequery.user.repository.UserRepository;
+import org.zerock.nextenter.user.DTO.SignupRequest;
+import org.zerock.nextenter.user.DTO.SignupResponse;
+import org.zerock.nextenter.user.entity.User;
+import org.zerock.nextenter.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;

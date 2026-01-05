@@ -1,4 +1,4 @@
-package org.zerock.codequery.user.DTO;
+package org.zerock.nextenter.user.DTO;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;

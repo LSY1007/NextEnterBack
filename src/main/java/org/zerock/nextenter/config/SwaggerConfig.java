@@ -1,4 +1,4 @@
-package org.zerock.codequery.config;
+package org.zerock.nextenter.config;
 
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;

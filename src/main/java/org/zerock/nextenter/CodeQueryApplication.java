@@ -1,4 +1,4 @@
-package org.zerock.codequery;
+package org.zerock.nextenter;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;

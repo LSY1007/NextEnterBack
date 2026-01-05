@@ -1,9 +1,9 @@
-package org.zerock.codequery.user.controller;
+package org.zerock.nextenter.company.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
-import org.zerock.codequery.user.DTO.SignupRequest;
-import org.zerock.codequery.user.DTO.SignupResponse;
-import org.zerock.codequery.user.service.UserService;
+import org.zerock.nextenter.company.dto.CompanyRegisterRequest;
+import org.zerock.nextenter.company.dto.CompanyResponse;
+import org.zerock.nextenter.company.service.CompanyService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,22 +14,22 @@ import java.util.HashMap;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping("/api/company")
 @RequiredArgsConstructor
 @Slf4j
-public class UserController {
+public class CompanyController {
 
-    private final UserService userService;
+    private final CompanyService companyService;
 
-    @Operation(summary = "일반 사용자 회원가입")
-    @PostMapping("/signup")
-    public ResponseEntity<Map<String, Object>> signup(@Valid @RequestBody SignupRequest request) {
+    @Operation(summary = "기업 회원가입")
+    @PostMapping("/register")
+    public ResponseEntity<Map<String, Object>> registerCompany(@Valid @RequestBody CompanyRegisterRequest request) {
         Map<String, Object> response = new HashMap<>();
 
         try {
-            SignupResponse result = userService.signup(request);
+            CompanyResponse result = companyService.registerCompany(request);
             response.put("success", true);
-            response.put("message", "회원가입이 완료되었습니다.");
+            response.put("message", "기업 정보가 등록되었습니다.");
             response.put("data", result);
             return ResponseEntity.ok(response);
 
@@ -39,7 +39,7 @@ public class UserController {
             return ResponseEntity.badRequest().body(response);
 
         } catch (Exception e) {
-            log.error("회원가입 오류", e);
+            log.error("기업 정보 등록 오류", e);
             response.put("success", false);
             response.put("message", "서버 오류가 발생했습니다.");
             return ResponseEntity.internalServerError().body(response);

@@ -1,4 +1,4 @@
-package org.zerock.codequery.company.dto;
+package org.zerock.nextenter.company.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

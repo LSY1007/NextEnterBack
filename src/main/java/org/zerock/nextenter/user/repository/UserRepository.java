@@ -1,6 +1,6 @@
-package org.zerock.codequery.user.repository;
+package org.zerock.nextenter.user.repository;
 
-import org.zerock.codequery.user.entity.User;
+import org.zerock.nextenter.user.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 import java.util.Optional;

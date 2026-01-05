@@ -1,0 +1,24 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Java source files
+*.java text diff=java
+*.properties text
+*.xml text
+*.yml text
+*.yaml text
+
+# Gradle files
+*.gradle text
+gradlew text
+gradlew.bat text
+
+# Markdown files
+*.md text
+
+# Shell scripts
+*.sh text eol=lf
+
+# Batch files
+*.bat text eol=crlf
+

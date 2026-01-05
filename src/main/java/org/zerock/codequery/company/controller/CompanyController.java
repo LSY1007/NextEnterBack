@@ -1,0 +1,48 @@
+package org.zerock.codequery.company.controller;
+
+import io.swagger.v3.oas.annotations.Operation;
+import org.zerock.codequery.company.dto.CompanyRegisterRequest;
+import org.zerock.codequery.company.dto.CompanyResponse;
+import org.zerock.codequery.company.service.CompanyService;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.HashMap;
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api/company")
+@RequiredArgsConstructor
+@Slf4j
+public class CompanyController {
+
+    private final CompanyService companyService;
+
+    @Operation(summary = "기업 회원가입")
+    @PostMapping("/register")
+    public ResponseEntity<Map<String, Object>> registerCompany(@Valid @RequestBody CompanyRegisterRequest request) {
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            CompanyResponse result = companyService.registerCompany(request);
+            response.put("success", true);
+            response.put("message", "기업 정보가 등록되었습니다.");
+            response.put("data", result);
+            return ResponseEntity.ok(response);
+
+        } catch (IllegalArgumentException e) {
+            response.put("success", false);
+            response.put("message", e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+
+        } catch (Exception e) {
+            log.error("기업 정보 등록 오류", e);
+            response.put("success", false);
+            response.put("message", "서버 오류가 발생했습니다.");
+            return ResponseEntity.internalServerError().body(response);
+        }
+    }
+}

@@ -38,7 +38,10 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .addFilterBefore(new JWTCheckFilter(jwtUtil), UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
+                        // ⭐ 인증 없이 접근 가능한 경로들
                         .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/api/resume/**").permitAll()
+                        .requestMatchers("/api/jobs/**").permitAll()
                         .requestMatchers("/api/company/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-resources/**").permitAll()
                         .anyRequest().authenticated()

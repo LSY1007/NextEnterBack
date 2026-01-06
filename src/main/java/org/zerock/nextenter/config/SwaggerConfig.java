@@ -15,8 +15,8 @@ public class SwaggerConfig {
     public OpenAPI openAPI() {
         return new OpenAPI()
                 .info(new Info()
-                        .title("Jinuweb API")
-                        .description("Swagger 연습")
+                        .title("CodeQuery API")
+                        .description("AI 기반 이력서 매칭 및 취업 지원 플랫폼")
                         .version("1.0.0"))
                 .addSecurityItem(new SecurityRequirement().addList("Bearer Authentication"))
                 .components(new Components()

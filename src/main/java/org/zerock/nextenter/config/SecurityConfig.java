@@ -40,7 +40,6 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // ⭐ 인증 없이 접근 가능한 경로들
                         .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers("/api/codequery/**").permitAll()
                         .requestMatchers("/api/resume/**").permitAll()
                         .requestMatchers("/api/jobs/**").permitAll()
                         .requestMatchers("/api/company/**").permitAll()

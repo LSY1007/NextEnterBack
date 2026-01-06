@@ -25,6 +25,7 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final JWTUtil jwtUtil;
 
     @Transactional
     public SignupResponse signup(SignupRequest request) {
@@ -33,27 +34,21 @@ public class UserService {
             throw new IllegalArgumentException("이미 존재하는 이메일입니다.");
         }
 
-        // UserType 변환
-        User.UserType userType = User.UserType.valueOf(request.getUserType().toUpperCase());
-
         // User 생성
         User user = User.builder()
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .name(request.getName())
-                .userType(userType)
-                .isActive(true)
+                .phone(request.getPhone())
                 .build();
 
         User savedUser = userRepository.save(user);
         log.info("회원가입 완료: email={}", savedUser.getEmail());
 
-        // Response 생성
         return SignupResponse.builder()
                 .userId(savedUser.getUserId())
                 .email(savedUser.getEmail())
                 .name(savedUser.getName())
-                .userType(savedUser.getUserType().name())
                 .build();
     }
 
@@ -81,19 +76,17 @@ public class UserService {
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId", user.getUserId());
         claims.put("email", user.getEmail());
-        claims.put("userType", user.getUserType().name());
+        claims.put("type", "USER");
 
-        String token = JWTUtil.generateToken(claims, 60); // 60분
+        String token = jwtUtil.generateToken(claims, 60);
 
         log.info("로그인 완료: email={}", user.getEmail());
 
-        // Response 생성
         return LoginResponse.builder()
                 .userId(user.getUserId())
                 .token(token)
                 .email(user.getEmail())
                 .name(user.getName())
-                .userType(user.getUserType().name())
                 .build();
     }
 }

@@ -1,15 +1,26 @@
 package org.zerock.nextenter.company.dto;
 
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 @Data
 public class CompanyRegisterRequest {
 
-    @NotNull(message = "사용자 ID는 필수입니다")
-    private Long companyId;
+    // 계정 정보
+    @NotBlank(message = "이메일은 필수입니다")
+    @Email(message = "올바른 이메일 형식이 아닙니다")
+    private String email;
 
+    @NotBlank(message = "비밀번호는 필수입니다")
+    private String password;
+
+    @NotBlank(message = "담당자 이름은 필수입니다")
+    private String name;
+
+    private String phone;
+
+    // 기업 정보
     @NotBlank(message = "사업자등록번호는 필수입니다")
     private String businessNumber;
 
@@ -17,14 +28,9 @@ public class CompanyRegisterRequest {
     private String companyName;
 
     private String industry;
-
     private Integer employeeCount;
-
     private String address;
-
     private String logoUrl;
-
     private String website;
-
     private String description;
 }

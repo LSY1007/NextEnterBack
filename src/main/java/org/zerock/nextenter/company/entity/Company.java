@@ -1,6 +1,5 @@
 package org.zerock.nextenter.company.entity;
 
-import org.zerock.nextenter.user.entity.User;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
@@ -19,10 +18,20 @@ public class Company {
     @Column(name = "company_id")
     private Long companyId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
-    private User user;
+    // 기업 계정 정보
+    @Column(nullable = false, unique = true, length = 100)
+    private String email;
 
+    @Column(nullable = false, length = 255)
+    private String password;
+
+    @Column(nullable = false, length = 50)
+    private String name; // 담당자 이름
+
+    @Column(length = 20)
+    private String phone;
+
+    // 기업 정보
     @Column(name = "business_number", nullable = false, unique = true, length = 20)
     private String businessNumber;
 
@@ -47,6 +56,13 @@ public class Company {
     @Column(columnDefinition = "TEXT")
     private String description;
 
+    @Builder.Default
+    @Column(name = "is_active", nullable = false)
+    private Boolean isActive = true;
+
+    @Column(name = "last_login_at")
+    private LocalDateTime lastLoginAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -57,6 +73,9 @@ public class Company {
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
+        if (this.isActive == null) {
+            this.isActive = true;
+        }
     }
 
     @PreUpdate

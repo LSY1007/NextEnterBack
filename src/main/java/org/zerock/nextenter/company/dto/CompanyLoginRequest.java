@@ -1,11 +1,11 @@
-package org.zerock.nextenter.user.DTO;
+package org.zerock.nextenter.company.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
 @Data
-public class SignupRequest {
+public class CompanyLoginRequest {
 
     @NotBlank(message = "이메일은 필수입니다")
     @Email(message = "올바른 이메일 형식이 아닙니다")
@@ -14,8 +14,6 @@ public class SignupRequest {
     @NotBlank(message = "비밀번호는 필수입니다")
     private String password;
 
-    @NotBlank(message = "이름은 필수입니다")
-    private String name;
-
-    private String phone;
+    @NotBlank(message = "사업자등록번호는 필수입니다")
+    private String businessNumber;
 }

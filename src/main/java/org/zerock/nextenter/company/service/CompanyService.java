@@ -96,7 +96,7 @@ public class CompanyService {
         claims.put("businessNumber", company.getBusinessNumber());
         claims.put("type", "COMPANY");
 
-        String token = jwtUtil.generateToken(claims, 60);
+        String token = JWTUtil.generateToken(claims, 60);
 
         log.info("기업 로그인 완료: email={}, companyName={}", company.getEmail(), company.getCompanyName());
 

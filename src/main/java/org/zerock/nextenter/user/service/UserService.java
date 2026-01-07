@@ -78,7 +78,7 @@ public class UserService {
         claims.put("email", user.getEmail());
         claims.put("type", "USER");
 
-        String token = jwtUtil.generateToken(claims, 60);
+        String token = JWTUtil.generateToken(claims, 60);
 
         log.info("로그인 완료: email={}", user.getEmail());
 

@@ -21,7 +21,7 @@ public class User {
     @Column(nullable = false, unique = true, length = 100)
     private String email;
 
-    @Column(nullable = false, length = 255)
+    @Column(length = 255)  // 소셜 로그인은 비밀번호 null 가능
     private String password;
 
     @Column(nullable = false, length = 50)
@@ -35,6 +35,13 @@ public class User {
 
     @Column(columnDefinition = "TEXT")
     private String bio;
+
+    // 소셜 로그인 관련 필드 추가
+    @Column(length = 20)
+    private String provider; // NAVER, KAKAO, GOOGLE 등
+
+    @Column(name = "provider_id", length = 100)
+    private String providerId; // 소셜 로그인 고유 ID
 
     @Builder.Default
     @Column(name = "is_active", nullable = false)

@@ -43,6 +43,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/resume/**").permitAll()
                         .requestMatchers("/api/jobs/**").permitAll()
                         .requestMatchers("/api/company/**").permitAll()
+                        .requestMatchers("/api/coverletters/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-resources/**").permitAll()
                         .anyRequest().authenticated()
                 );

@@ -34,6 +34,7 @@ public class JobPosting {
     @Column(name = "preferred_skills", columnDefinition = "LONGTEXT")
     private String preferredSkills;
 
+    @Builder.Default
     @Column(name = "experience_min")
     private Integer experienceMin = 0;
 
@@ -54,17 +55,21 @@ public class JobPosting {
 
     private LocalDate deadline;
 
+    @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private Status status = Status.ACTIVE;
 
     // 통계
+    @Builder.Default
     @Column(name = "view_count", nullable = false)
     private Integer viewCount = 0;
 
+    @Builder.Default
     @Column(name = "applicant_count", nullable = false)
     private Integer applicantCount = 0;
 
+    @Builder.Default
     @Column(name = "bookmark_count", nullable = false)
     private Integer bookmarkCount = 0;
 

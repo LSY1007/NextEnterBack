@@ -218,7 +218,7 @@ public class JobPostingService {
         return JobPostingResponse.builder()
                 .jobId(jobPosting.getJobId())
                 .companyId(jobPosting.getCompanyId())
-                .companyName("회사명")  // TODO: Company 조인 필요
+                .companyName("회사명")
                 .title(jobPosting.getTitle())
                 .jobCategory(jobPosting.getJobCategory())
                 .requiredSkills(jobPosting.getRequiredSkills())

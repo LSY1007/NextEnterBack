@@ -95,8 +95,8 @@ public class JobPostingService {
                 .location(request.getLocation())
                 .description(request.getDescription())
                 .deadline(request.getDeadline())
-                .status(request.getStatus() != null ?
-                        JobPosting.Status.valueOf(request.getStatus()) : JobPosting.Status.ACTIVE)
+                .status(request.getStatus() != null && !request.getStatus().isEmpty() ?
+                        JobPosting.Status.valueOf(request.getStatus().toUpperCase()) : JobPosting.Status.ACTIVE)
                 .build();
 
         jobPosting = jobPostingRepository.save(jobPosting);

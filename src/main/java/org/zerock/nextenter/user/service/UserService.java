@@ -1,6 +1,5 @@
 package org.zerock.nextenter.user.service;
 
-
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -34,21 +33,36 @@ public class UserService {
             throw new IllegalArgumentException("이미 존재하는 이메일입니다.");
         }
 
+        // ✅ 성별 변환 (String → Enum)
+        User.Gender gender = null;
+        if (request.getGender() != null && !request.getGender().isEmpty()) {
+            try {
+                gender = User.Gender.valueOf(request.getGender().toUpperCase());
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("유효하지 않은 성별입니다. MALE, FEMALE 중 하나를 선택하세요.");
+            }
+        }
+
         // User 생성
         User user = User.builder()
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .name(request.getName())
                 .phone(request.getPhone())
+                .age(request.getAge())           // ✅ 나이 추가
+                .gender(gender)                  // ✅ 성별 추가
                 .build();
 
         User savedUser = userRepository.save(user);
-        log.info("회원가입 완료: email={}", savedUser.getEmail());
+        log.info("회원가입 완료: email={}, age={}, gender={}",
+                savedUser.getEmail(), savedUser.getAge(), savedUser.getGender());
 
         return SignupResponse.builder()
                 .userId(savedUser.getUserId())
                 .email(savedUser.getEmail())
                 .name(savedUser.getName())
+                .age(savedUser.getAge())                                          // ✅ 나이 반환
+                .gender(savedUser.getGender() != null ? savedUser.getGender().name() : null)  // ✅ 성별 반환
                 .build();
     }
 

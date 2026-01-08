@@ -11,6 +11,7 @@ import org.zerock.nextenter.user.DTO.OAuth2UserInfo;
 import org.zerock.nextenter.user.entity.User;
 import org.zerock.nextenter.user.repository.UserRepository;
 
+import java.net.URI;
 import java.util.Map;
 
 @Service
@@ -46,7 +47,22 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
                     .build();
         }
 
-        throw new OAuth2AuthenticationException("지원하지 않는 소셜 로그인입니다.");
+        // ✅ 카카오 처리 추가
+        if ("kakao".equals(registrationId)) {
+            Long id = (Long) attributes.get("id");
+            Map<String, Object> kakaoAccount = (Map<String, Object>) attributes.get("kakao_account");
+            Map<String, Object> profile = (Map<String, Object>) kakaoAccount.get("profile");
+
+            return OAuth2UserInfo.builder()
+                    .providerId(String.valueOf(id))
+                    .provider("KAKAO")
+                    .email((String) kakaoAccount.get("email"))
+                    .name((String) profile.get("nickname"))
+                    .profileImage((String) profile.get("profile_image_url"))
+                    .build();
+        }
+
+        throw new OAuth2AuthenticationException("지원하지 않는 소셜 로그인입니다: " + registrationId);
     }
 
     private User saveOrUpdate(OAuth2UserInfo userInfo) {
@@ -66,13 +82,15 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
                     .isActive(true)
                     .build();
 
-            log.info("신규 소셜 로그인 사용자 생성: {}", userInfo.getEmail());
+            log.info("신규 소셜 로그인 사용자 생성: provider={}, email={}",
+                    userInfo.getProvider(), userInfo.getEmail());
         } else {
             // 기존 사용자 정보 업데이트
             user.setName(userInfo.getName());
             user.setProfileImage(userInfo.getProfileImage());
 
-            log.info("기존 소셜 로그인 사용자 업데이트: {}", userInfo.getEmail());
+            log.info("기존 소셜 로그인 사용자 업데이트: provider={}, email={}",
+                    userInfo.getProvider(), userInfo.getEmail());
         }
 
         return userRepository.save(user);

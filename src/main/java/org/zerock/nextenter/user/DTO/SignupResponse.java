@@ -14,4 +14,6 @@ public class SignupResponse {
     private Long userId;
     private String email;
     private String name;
+    private Integer age;        // ✅ 나이 추가
+    private String gender;      // ✅ 성별 추가
 }

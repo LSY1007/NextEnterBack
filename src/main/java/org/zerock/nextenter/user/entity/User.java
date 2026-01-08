@@ -30,13 +30,22 @@ public class User {
     @Column(length = 20)
     private String phone;
 
+    // ✅ 나이 추가
+    @Column
+    private Integer age;
+
+    // ✅ 성별 추가 (MALE, FEMALE, OTHER)
+    @Enumerated(EnumType.STRING)
+    @Column(length = 10)
+    private Gender gender;
+
     @Column(name = "profile_image", length = 255)
     private String profileImage;
 
     @Column(columnDefinition = "TEXT")
     private String bio;
 
-    // 소셜 로그인 관련 필드 추가
+    // 소셜 로그인 관련 필드
     @Column(length = 20)
     private String provider; // NAVER, KAKAO, GOOGLE 등
 
@@ -55,6 +64,11 @@ public class User {
 
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    // ✅ 성별 Enum
+    public enum Gender {
+        MALE, FEMALE, OTHER
+    }
 
     @PrePersist
     protected void onCreate() {

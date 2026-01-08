@@ -12,6 +12,5 @@ build/
 out/
 .gradle/
 bin/
-build.gradle
 src/main/resources/application-local.properties
 

@@ -1,4 +1,4 @@
-# OS & IDE
+﻿# OS & IDE
 .DS_Store
 Thumbs.db
 .idea/
@@ -12,6 +12,5 @@ build/
 out/
 .gradle/
 bin/
-build.gradle
 src/main/resources/application-local.properties
 

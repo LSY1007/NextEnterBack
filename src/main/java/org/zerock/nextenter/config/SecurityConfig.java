@@ -50,6 +50,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/interview/**").permitAll()
                         .requestMatchers("/api/recommendations/**").permitAll()
                         .requestMatchers("/api/bookmarks/**").permitAll()
+                        .requestMatchers("/uploads/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-resources/**").permitAll()
                         .requestMatchers("/login/oauth2/code/**").permitAll()  // OAuth2 콜백
                         .anyRequest().authenticated()

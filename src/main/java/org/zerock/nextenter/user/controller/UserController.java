@@ -1,16 +1,13 @@
 package org.zerock.nextenter.user.controller;
 
-
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.zerock.nextenter.user.DTO.LoginRequest;
-import org.zerock.nextenter.user.DTO.LoginResponse;
-import org.zerock.nextenter.user.DTO.SignupRequest;
-import org.zerock.nextenter.user.DTO.SignupResponse;
+import org.springframework.web.multipart.MultipartFile;
+import org.zerock.nextenter.user.DTO.*;
 import org.zerock.nextenter.user.service.UserService;
 
 import java.util.HashMap;
@@ -74,7 +71,6 @@ public class UserController {
         }
     }
 
-
     @Operation(summary = "일반 사용자 로그아웃")
     @PostMapping("/logout")
     public ResponseEntity<Map<String, Object>> logout() {
@@ -82,5 +78,112 @@ public class UserController {
         response.put("success", true);
         response.put("message", "로그아웃 되었습니다.");
         return ResponseEntity.ok(response);
+    }
+
+    // ✅ 아래부터 새로 추가하는 메서드들
+
+    @Operation(summary = "사용자 프로필 조회")
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<Map<String, Object>> getUserProfile(@PathVariable Long userId) {
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            UserProfileResponse profile = userService.getUserProfile(userId);
+            response.put("success", true);
+            response.put("message", "프로필 조회 성공");
+            response.put("data", profile);
+            return ResponseEntity.ok(response);
+
+        } catch (IllegalArgumentException e) {
+            response.put("success", false);
+            response.put("message", e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+
+        } catch (Exception e) {
+            log.error("프로필 조회 오류", e);
+            response.put("success", false);
+            response.put("message", "서버 오류가 발생했습니다.");
+            return ResponseEntity.internalServerError().body(response);
+        }
+    }
+
+    @Operation(summary = "사용자 프로필 수정")
+    @PutMapping("/user/{userId}")
+    public ResponseEntity<Map<String, Object>> updateUserProfile(
+            @PathVariable Long userId,
+            @Valid @RequestBody UpdateProfileRequest request) {
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            UserProfileResponse profile = userService.updateUserProfile(userId, request);
+            response.put("success", true);
+            response.put("message", "프로필 수정 성공");
+            response.put("data", profile);
+            return ResponseEntity.ok(response);
+
+        } catch (IllegalArgumentException e) {
+            response.put("success", false);
+            response.put("message", e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+
+        } catch (Exception e) {
+            log.error("프로필 수정 오류", e);
+            response.put("success", false);
+            response.put("message", "서버 오류가 발생했습니다.");
+            return ResponseEntity.internalServerError().body(response);
+        }
+    }
+
+    @Operation(summary = "프로필 이미지 업로드")
+    @PostMapping("/user/{userId}/profile-image")
+    public ResponseEntity<Map<String, Object>> uploadProfileImage(
+            @PathVariable Long userId,
+            @RequestParam("file") MultipartFile file) {
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            // 파일 검증
+            if (file.isEmpty()) {
+                response.put("success", false);
+                response.put("message", "파일이 비어있습니다.");
+                return ResponseEntity.badRequest().body(response);
+            }
+
+            // 파일 크기 체크 (5MB)
+            if (file.getSize() > 5 * 1024 * 1024) {
+                response.put("success", false);
+                response.put("message", "파일 크기는 5MB 이하여야 합니다.");
+                return ResponseEntity.badRequest().body(response);
+            }
+
+            // 이미지 파일인지 확인
+            String contentType = file.getContentType();
+            if (contentType == null || !contentType.startsWith("image/")) {
+                response.put("success", false);
+                response.put("message", "이미지 파일만 업로드 가능합니다.");
+                return ResponseEntity.badRequest().body(response);
+            }
+
+            String imageUrl = userService.uploadProfileImage(userId, file);
+
+            Map<String, String> data = new HashMap<>();
+            data.put("profileImage", imageUrl);
+
+            response.put("success", true);
+            response.put("message", "프로필 이미지 업로드 성공");
+            response.put("data", data);
+            return ResponseEntity.ok(response);
+
+        } catch (IllegalArgumentException e) {
+            response.put("success", false);
+            response.put("message", e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+
+        } catch (Exception e) {
+            log.error("이미지 업로드 오류", e);
+            response.put("success", false);
+            response.put("message", "이미지 업로드 중 오류가 발생했습니다.");
+            return ResponseEntity.internalServerError().body(response);
+        }
     }
 }

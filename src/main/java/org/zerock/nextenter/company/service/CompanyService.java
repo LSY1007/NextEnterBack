@@ -25,7 +25,7 @@ public class CompanyService {
 
     private final CompanyRepository companyRepository;
     private final PasswordEncoder passwordEncoder;
-    private final JWTUtil jwtUtil;
+    private final JWTUtil JWTUtil;
 
     @Transactional
     public CompanyResponse registerCompany(CompanyRegisterRequest request) {
@@ -96,7 +96,7 @@ public class CompanyService {
         claims.put("businessNumber", company.getBusinessNumber());
         claims.put("type", "COMPANY");
 
-        String token = JWTUtil.generateToken(claims, 60);
+        String token = JWTUtil.generateToken(claims, 180);
 
         log.info("기업 로그인 완료: email={}, companyName={}", company.getEmail(), company.getCompanyName());
 

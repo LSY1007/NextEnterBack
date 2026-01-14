@@ -3,6 +3,8 @@
 Thumbs.db
 .idea/
 .vscode/
+.cursor/
+.settings/
 *.iws
 *.iml
 *.ipr
@@ -13,4 +15,5 @@ out/
 .gradle/
 bin/
 src/main/resources/application-local.properties
-
+# Local-only Lombok warning suppression
+lombok.config

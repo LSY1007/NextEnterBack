@@ -133,7 +133,6 @@ public class ResumeService {
         return convertToResponse(resume);
     }
 
-    // 이력서 삭제 (소프트 삭제)
     @Transactional
     public void deleteResume(Long resumeId, Long userId) {
         log.info("이력서 삭제 - resumeId: {}, userId: {}", resumeId, userId);
@@ -154,10 +153,9 @@ public class ResumeService {
             }
         }
 
-        // 소프트 삭제
-        resume.setDeletedAt(LocalDateTime.now());
-        resumeRepository.save(resume);
-        log.info("이력서 삭제 완료 - resumeId: {}", resumeId);
+        // ✅ 물리적 삭제 (DB에서 완전히 제거)
+        resumeRepository.delete(resume);
+        log.info("이력서 물리적 삭제 완료 - resumeId: {}", resumeId);
     }
 
     // Private Methods

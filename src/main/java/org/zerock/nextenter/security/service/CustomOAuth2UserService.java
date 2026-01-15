@@ -11,7 +11,6 @@ import org.zerock.nextenter.user.DTO.OAuth2UserInfo;
 import org.zerock.nextenter.user.entity.User;
 import org.zerock.nextenter.user.repository.UserRepository;
 
-import java.net.URI;
 import java.util.Map;
 
 @Service
@@ -33,12 +32,14 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
 
             OAuth2UserInfo userInfo = extractUserInfo(registrationId, oAuth2User.getAttributes());
 
-            log.info("UserInfo 추출 완료 - email: {}, name: {}", userInfo.getEmail(), userInfo.getName());
+            log.info("UserInfo 추출 완료 - email: {}, name: {}, provider: {}",
+                    userInfo.getEmail(), userInfo.getName(), userInfo.getProvider());
 
             User user = saveOrUpdate(userInfo);
 
             log.info("=== OAuth2 로그인 성공 ===");
-            log.info("UserId: {}, Email: {}", user.getUserId(), user.getEmail());
+            log.info("UserId: {}, Email: {}, Provider: {}",
+                    user.getUserId(), user.getEmail(), user.getProvider());
 
             return new CustomOAuth2User(user, oAuth2User.getAttributes());
         } catch (Exception e) {
@@ -49,6 +50,7 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
     }
 
     private OAuth2UserInfo extractUserInfo(String registrationId, Map<String, Object> attributes) {
+        // ✅ 네이버
         if ("naver".equals(registrationId)) {
             Map<String, Object> response = (Map<String, Object>) attributes.get("response");
             return OAuth2UserInfo.builder()
@@ -60,7 +62,7 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
                     .build();
         }
 
-        // ✅ 카카오 처리 - null 체크 추가
+        // ✅ 카카오
         if ("kakao".equals(registrationId)) {
             log.info("카카오 attributes: {}", attributes);
 
@@ -88,43 +90,73 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
             return OAuth2UserInfo.builder()
                     .providerId(String.valueOf(id))
                     .provider("KAKAO")
-                    .email(email != null ? email : "no-email@kakao.com") // 이메일 없으면 기본값
+                    .email(email != null ? email : "no-email@kakao.com")
                     .name(nickname != null ? nickname : "카카오사용자")
                     .profileImage(profileImageUrl)
+                    .build();
+        }
+
+        // ✅ 구글 (새로 추가)
+        if ("google".equals(registrationId)) {
+            log.info("구글 attributes: {}", attributes);
+
+            String sub = (String) attributes.get("sub"); // 구글 고유 ID
+            String email = (String) attributes.get("email");
+            String name = (String) attributes.get("name");
+            String picture = (String) attributes.get("picture");
+
+            log.info("구글 사용자 정보 - sub: {}, email: {}, name: {}", sub, email, name);
+
+            return OAuth2UserInfo.builder()
+                    .providerId(sub)
+                    .provider("GOOGLE")
+                    .email(email != null ? email : "no-email@google.com")
+                    .name(name != null ? name : "구글사용자")
+                    .profileImage(picture)
                     .build();
         }
 
         throw new OAuth2AuthenticationException("지원하지 않는 소셜 로그인입니다: " + registrationId);
     }
 
+    /**
+     * 각 소셜 계정을 독립적으로 관리
+     * - email + provider 조합으로 사용자 조회
+     * - 같은 이메일이어도 provider가 다르면 별도 계정 생성
+     */
     private User saveOrUpdate(OAuth2UserInfo userInfo) {
-        User user = userRepository.findByProviderAndProviderId(
-                userInfo.getProvider(),
-                userInfo.getProviderId()
-        ).orElse(null);
+        // 1️⃣ email + provider 조합으로 조회
+        User user = userRepository
+                .findByEmailAndProvider(userInfo.getEmail(), userInfo.getProvider())
+                .orElse(null);
 
-        if (user == null) {
-            // 신규 사용자 생성
-            user = User.builder()
-                    .email(userInfo.getEmail())
-                    .name(userInfo.getName())
-                    .profileImage(userInfo.getProfileImage())
-                    .provider(userInfo.getProvider())
-                    .providerId(userInfo.getProviderId())
-                    .isActive(true)
-                    .build();
-
-            log.info("신규 소셜 로그인 사용자 생성: provider={}, email={}",
-                    userInfo.getProvider(), userInfo.getEmail());
-        } else {
-            // 기존 사용자 정보 업데이트
+        if (user != null) {
+            // 기존 소셜 계정 존재 - 정보 업데이트
             user.setName(userInfo.getName());
             user.setProfileImage(userInfo.getProfileImage());
+            user.setLastLoginAt(java.time.LocalDateTime.now());
 
-            log.info("기존 소셜 로그인 사용자 업데이트: provider={}, email={}",
-                    userInfo.getProvider(), userInfo.getEmail());
+            log.info("✅ 기존 소셜 계정 로그인: email={}, provider={}",
+                    userInfo.getEmail(), userInfo.getProvider());
+
+            return userRepository.save(user);
         }
 
-        return userRepository.save(user);
+        // 2️⃣ 새로운 소셜 계정 생성
+        User newUser = User.builder()
+                .email(userInfo.getEmail())
+                .name(userInfo.getName())
+                .profileImage(userInfo.getProfileImage())
+                .provider(userInfo.getProvider())
+                .providerId(userInfo.getProviderId())
+                .isActive(true)
+                .createdAt(java.time.LocalDateTime.now())
+                .lastLoginAt(java.time.LocalDateTime.now())
+                .build();
+
+        log.info("✅ 신규 소셜 계정 생성: email={}, provider={}",
+                userInfo.getEmail(), userInfo.getProvider());
+
+        return userRepository.save(newUser);
     }
 }

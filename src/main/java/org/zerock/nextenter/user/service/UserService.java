@@ -227,4 +227,33 @@ public class UserService {
 
         return imageUrl;
     }
+
+    @Transactional
+    public User getOrCreateOAuthUser(
+            String email,
+            String name,
+            String provider,
+            String providerId
+    ) {
+        return userRepository.findByEmail(email)
+                .map(user -> {
+                    // 기존 회원 → OAuth 정보만 갱신
+                    user.setProvider(provider);
+                    user.setProviderId(providerId);
+                    user.setLastLoginAt(LocalDateTime.now());
+                    return user;
+                })
+                .orElseGet(() -> {
+                    // 신규 OAuth 회원
+                    User newUser = User.builder()
+                            .email(email)
+                            .name(name)
+                            .provider(provider)
+                            .providerId(providerId)
+                            .isActive(true)
+                            .createdAt(LocalDateTime.now())
+                            .build();
+                    return userRepository.save(newUser);
+                });
+    }
 }

@@ -5,7 +5,14 @@ import lombok.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "user")
+@Table(name = "user",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_email_provider",
+                        columnNames = {"email", "provider"}
+                )
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -18,7 +25,8 @@ public class User {
     @Column(name = "user_id")
     private Long userId;
 
-    @Column(nullable = false, unique = true, length = 100)
+    // ✅ unique 제약조건 제거 - email + provider 조합으로 unique 관리
+    @Column(nullable = false, length = 100)
     private String email;
 
     @Column(length = 255)  // 소셜 로그인은 비밀번호 null 가능
@@ -30,11 +38,9 @@ public class User {
     @Column(length = 20)
     private String phone;
 
-    // ✅ 나이 추가
     @Column
     private Integer age;
 
-    // ✅ 성별 추가 (MALE, FEMALE, OTHER)
     @Enumerated(EnumType.STRING)
     @Column(length = 10)
     private Gender gender;
@@ -45,9 +51,9 @@ public class User {
     @Column(columnDefinition = "TEXT")
     private String bio;
 
-    // 소셜 로그인 관련 필드
+    // ✅ 소셜 로그인 관련 필드 - provider가 null이면 일반 회원
     @Column(length = 20)
-    private String provider; // NAVER, KAKAO, GOOGLE 등
+    private String provider; // NAVER, KAKAO, null(일반회원)
 
     @Column(name = "provider_id", length = 100)
     private String providerId; // 소셜 로그인 고유 ID
@@ -65,7 +71,6 @@ public class User {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    // ✅ 성별 Enum
     public enum Gender {
         MALE, FEMALE, OTHER
     }

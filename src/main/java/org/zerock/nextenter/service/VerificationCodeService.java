@@ -44,6 +44,8 @@ public class VerificationCodeService {
         // 이메일 발송
         if ("WITHDRAWAL".equals(type)) {
             emailService.sendWithdrawalVerificationEmail(email, userName, code);
+        } else if ("PASSWORD_CHANGE".equals(type)) {
+            emailService.sendPasswordChangeVerificationEmail(email, userName, code);
         }
 
         log.info("인증코드 생성 및 발송 완료: email={}, type={}, userType={}", email, type, userType);

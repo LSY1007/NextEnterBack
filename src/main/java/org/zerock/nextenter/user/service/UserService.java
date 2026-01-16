@@ -303,4 +303,58 @@ public class UserService {
 
         log.info("회원탈퇴 완료: userId={}, email={}", userId, user.getEmail());
     }
+    /**
+     * 비밀번호 변경 인증코드 발송
+     */
+    @Transactional
+    public void requestPasswordChange(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 이메일입니다."));
+
+        // 소셜 로그인 사용자는 비밀번호 변경 불가
+        if (user.getProvider() != null && !user.getProvider().equals("LOCAL")) {
+            throw new IllegalArgumentException("소셜 로그인 사용자는 비밀번호를 변경할 수 없습니다.");
+        }
+
+        // 인증코드 생성 및 이메일 발송
+        verificationCodeService.generateAndSendVerificationCode(
+                user.getEmail(),
+                user.getName(),
+                "PASSWORD_CHANGE",
+                "USER"
+        );
+
+        log.info("비밀번호 변경 인증코드 발송: email={}", email);
+    }
+
+    /**
+     * 비밀번호 변경 실행
+     */
+    @Transactional
+    public void changePassword(String email, String verificationCode, String newPassword) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 이메일입니다."));
+
+        // 소셜 로그인 사용자는 비밀번호 변경 불가
+        if (user.getProvider() != null && !user.getProvider().equals("LOCAL")) {
+            throw new IllegalArgumentException("소셜 로그인 사용자는 비밀번호를 변경할 수 없습니다.");
+        }
+
+        // 인증코드 검증
+        boolean isValid = verificationCodeService.verifyCode(
+                email,
+                verificationCode,
+                "PASSWORD_CHANGE"
+        );
+
+        if (!isValid) {
+            throw new IllegalArgumentException("인증코드가 유효하지 않거나 만료되었습니다.");
+        }
+
+        // 새 비밀번호 암호화 후 저장
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+
+        log.info("비밀번호 변경 완료: email={}", email);
+    }
 }

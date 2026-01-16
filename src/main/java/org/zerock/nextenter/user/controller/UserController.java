@@ -242,4 +242,64 @@ public class UserController {
             return ResponseEntity.internalServerError().body(response);
         }
     }
+
+    /**
+     * 비밀번호 변경 인증코드 발송
+     */
+    @Operation(summary = "비밀번호 변경 인증코드 발송")
+    @PostMapping("/user/password-change/request")
+    public ResponseEntity<Map<String, Object>> requestPasswordChange(
+            @Valid @RequestBody SendVerificationRequest request) {
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            userService.requestPasswordChange(request.getEmail());
+            response.put("success", true);
+            response.put("message", "인증코드가 이메일로 발송되었습니다.");
+            return ResponseEntity.ok(response);
+
+        } catch (IllegalArgumentException e) {
+            response.put("success", false);
+            response.put("message", e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+
+        } catch (Exception e) {
+            log.error("인증코드 발송 실패", e);
+            response.put("success", false);
+            response.put("message", "서버 오류가 발생했습니다.");
+            return ResponseEntity.internalServerError().body(response);
+        }
+    }
+
+    /**
+     * 비밀번호 변경 실행
+     */
+    @Operation(summary = "비밀번호 변경 실행")
+    @PostMapping("/user/password-change")
+    public ResponseEntity<Map<String, Object>> changePassword(
+            @Valid @RequestBody ChangePasswordRequest request) {
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            userService.changePassword(
+                    request.getEmail(),
+                    request.getVerificationCode(),
+                    request.getNewPassword()
+            );
+            response.put("success", true);
+            response.put("message", "비밀번호가 변경되었습니다.");
+            return ResponseEntity.ok(response);
+
+        } catch (IllegalArgumentException e) {
+            response.put("success", false);
+            response.put("message", e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+
+        } catch (Exception e) {
+            log.error("비밀번호 변경 실패", e);
+            response.put("success", false);
+            response.put("message", "서버 오류가 발생했습니다.");
+            return ResponseEntity.internalServerError().body(response);
+        }
+    }
 }

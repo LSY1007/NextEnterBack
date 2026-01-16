@@ -93,4 +93,34 @@ public class EmailService {
 
         sendHtmlEmail(to, subject, htmlContent);
     }
+
+    /**
+     * 비밀번호 변경 인증코드 이메일
+     */
+    public void sendPasswordChangeVerificationEmail(String to, String userName, String verificationCode) {
+        String subject = "NextEnter 비밀번호 변경 인증코드";
+        String htmlContent = String.format("""
+            <html>
+            <body style="font-family: Arial, sans-serif; padding: 20px;">
+                <div style="max-width: 600px; margin: 0 auto; border: 1px solid #ddd; border-radius: 10px; padding: 30px;">
+                    <h2 style="color: #2563eb;">비밀번호 변경 인증코드</h2>
+                    <p>안녕하세요, <strong>%s</strong>님!</p>
+                    <p>비밀번호 변경을 위한 인증코드입니다.</p>
+                    <br>
+                    <div style="background-color: #f3f4f6; padding: 20px; border-radius: 5px; text-align: center;">
+                        <p style="margin: 0; color: #666; font-size: 14px;">인증코드</p>
+                        <h1 style="margin: 10px 0; color: #2563eb; letter-spacing: 5px;">%s</h1>
+                    </div>
+                    <br>
+                    <p style="color: #666; font-size: 14px;">
+                        ⚠️ 이 인증코드는 10분간 유효합니다.<br>
+                        ⚠️ 본인이 요청하지 않았다면 이 메일을 무시하세요.
+                    </p>
+                </div>
+            </body>
+            </html>
+            """, userName, verificationCode);
+
+        sendHtmlEmail(to, subject, htmlContent);
+    }
 }

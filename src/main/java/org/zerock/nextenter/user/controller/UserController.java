@@ -186,4 +186,60 @@ public class UserController {
             return ResponseEntity.internalServerError().body(response);
         }
     }
+
+    /**
+     * 회원탈퇴 요청 (인증코드 발송)
+     */
+    @Operation(summary = "회원탈퇴 요청")
+    @PostMapping("/user/{userId}/withdrawal/request")
+    public ResponseEntity<Map<String, Object>> requestWithdrawal(@PathVariable Long userId) {
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            userService.requestWithdrawal(userId);
+            response.put("success", true);
+            response.put("message", "인증코드가 이메일로 발송되었습니다.");
+            return ResponseEntity.ok(response);
+
+        } catch (IllegalArgumentException e) {
+            response.put("success", false);
+            response.put("message", e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+
+        } catch (Exception e) {
+            log.error("회원탈퇴 요청 실패", e);
+            response.put("success", false);
+            response.put("message", "서버 오류가 발생했습니다.");
+            return ResponseEntity.internalServerError().body(response);
+        }
+    }
+
+    /**
+     * 회원탈퇴 실행 (인증코드 확인)
+     */
+    @Operation(summary = "회원탈퇴 실행")
+    @PostMapping("/user/{userId}/withdrawal")
+    public ResponseEntity<Map<String, Object>> withdrawal(
+            @PathVariable Long userId,
+            @Valid @RequestBody WithdrawalRequest request) {
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            userService.withdrawal(userId, request.getVerificationCode());
+            response.put("success", true);
+            response.put("message", "회원탈퇴가 완료되었습니다.");
+            return ResponseEntity.ok(response);
+
+        } catch (IllegalArgumentException e) {
+            response.put("success", false);
+            response.put("message", e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+
+        } catch (Exception e) {
+            log.error("회원탈퇴 실패", e);
+            response.put("success", false);
+            response.put("message", "서버 오류가 발생했습니다.");
+            return ResponseEntity.internalServerError().body(response);
+        }
+    }
 }

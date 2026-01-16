@@ -12,6 +12,7 @@ import org.zerock.nextenter.company.dto.CompanyRegisterRequest;
 import org.zerock.nextenter.company.dto.CompanyResponse;
 import org.zerock.nextenter.company.entity.Company;
 import org.zerock.nextenter.company.repository.CompanyRepository;
+import org.zerock.nextenter.service.VerificationCodeService;
 import org.zerock.nextenter.util.JWTUtil;
 
 import java.time.LocalDateTime;
@@ -26,6 +27,7 @@ public class CompanyService {
     private final CompanyRepository companyRepository;
     private final PasswordEncoder passwordEncoder;
     private final JWTUtil JWTUtil;
+    private final VerificationCodeService verificationCodeService;
 
     @Transactional
     public CompanyResponse registerCompany(CompanyRegisterRequest request) {
@@ -108,5 +110,49 @@ public class CompanyService {
                 .companyName(company.getCompanyName())
                 .businessNumber(company.getBusinessNumber())
                 .build();
+    }
+
+    /**
+     * 기업 회원탈퇴 요청 (인증코드 발송)
+     */
+    @Transactional
+    public void requestWithdrawal(Long companyId) {
+        Company company = companyRepository.findById(companyId)
+                .orElseThrow(() -> new IllegalArgumentException("기업을 찾을 수 없습니다."));
+
+        // 인증코드 생성 및 이메일 발송
+        verificationCodeService.generateAndSendVerificationCode(
+                company.getEmail(),
+                company.getName(),
+                "WITHDRAWAL",
+                "COMPANY"
+        );
+
+        log.info("기업 회원탈퇴 인증코드 발송: companyId={}, email={}", companyId, company.getEmail());
+    }
+
+    /**
+     * 기업 회원탈퇴 실행 (인증코드 확인 후 삭제)
+     */
+    @Transactional
+    public void withdrawal(Long companyId, String verificationCode) {
+        Company company = companyRepository.findById(companyId)
+                .orElseThrow(() -> new IllegalArgumentException("기업을 찾을 수 없습니다."));
+
+        // 인증코드 검증
+        boolean isValid = verificationCodeService.verifyCode(
+                company.getEmail(),
+                verificationCode,
+                "WITHDRAWAL"
+        );
+
+        if (!isValid) {
+            throw new IllegalArgumentException("인증코드가 유효하지 않거나 만료되었습니다.");
+        }
+
+        // 기업 삭제 (CASCADE로 연관 데이터도 함께 삭제됨)
+        companyRepository.delete(company);
+
+        log.info("기업 회원탈퇴 완료: companyId={}, email={}", companyId, company.getEmail());
     }
 }

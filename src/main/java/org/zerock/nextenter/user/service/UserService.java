@@ -7,6 +7,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import org.zerock.nextenter.service.VerificationCodeService;
 import org.zerock.nextenter.user.DTO.*;
 import org.zerock.nextenter.user.entity.User;
 import org.zerock.nextenter.user.repository.UserRepository;
@@ -27,6 +28,7 @@ public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JWTUtil jwtUtil;
+    private final VerificationCodeService verificationCodeService;
 
     // ✅ 기존 설정 사용
     @Value("${file.upload-dir}")
@@ -57,6 +59,7 @@ public class UserService {
                 .phone(request.getPhone())
                 .age(request.getAge())
                 .gender(gender)
+                .isActive(true)
                 .build();
 
         User savedUser = userRepository.save(user);
@@ -255,5 +258,49 @@ public class UserService {
                             .build();
                     return userRepository.save(newUser);
                 });
+    }
+
+    /**
+     * 회원탈퇴 요청 (인증코드 발송)
+     */
+    @Transactional
+    public void requestWithdrawal(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+
+        // 인증코드 생성 및 이메일 발송
+        verificationCodeService.generateAndSendVerificationCode(
+                user.getEmail(),
+                user.getName(),
+                "WITHDRAWAL",
+                "USER"
+        );
+
+        log.info("회원탈퇴 인증코드 발송: userId={}, email={}", userId, user.getEmail());
+    }
+
+    /**
+     * 회원탈퇴 실행 (인증코드 확인 후 삭제)
+     */
+    @Transactional
+    public void withdrawal(Long userId, String verificationCode) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+
+        // 인증코드 검증
+        boolean isValid = verificationCodeService.verifyCode(
+                user.getEmail(),
+                verificationCode,
+                "WITHDRAWAL"
+        );
+
+        if (!isValid) {
+            throw new IllegalArgumentException("인증코드가 유효하지 않거나 만료되었습니다.");
+        }
+
+        // 회원 삭제 (CASCADE로 연관 데이터도 함께 삭제됨)
+        userRepository.delete(user);
+
+        log.info("회원탈퇴 완료: userId={}, email={}", userId, user.getEmail());
     }
 }

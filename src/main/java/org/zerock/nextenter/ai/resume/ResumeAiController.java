@@ -1,4 +1,4 @@
-package org.zerock.nextenter.ai;
+package org.zerock.nextenter.ai.resume;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,3 +18,4 @@ public class ResumeAiController {
         return resumeAiService.analyzeResume(text);
     }
 }
+aaaa

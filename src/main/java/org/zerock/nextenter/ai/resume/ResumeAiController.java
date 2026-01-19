@@ -52,3 +52,4 @@ public class ResumeAiController {
         return resumeAiRecommendService.getRecommendById(recommendId);
     }
 }
+

@@ -1,4 +1,4 @@
-package org.zerock.nextenter.ai;
+package org.zerock.nextenter.ai.resume;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -12,13 +12,13 @@ public class ResumeAiService {
 
     private final RestTemplate restTemplate;
 
-    @Value("${ai.server.url:http://localhost:8000}")
+    @Value("${ai.server.url:http://localhost:8000/api/v1}")
     private String aiServerUrl;
 
     public String analyzeResume(String text) {
         String url = aiServerUrl + "/analyze";
-        // Assuming the Python server expects a JSON with key "text"
-        Map<String, String> request = Map.of("text", text);
+        // 파이썬 서버가 요구하는 필드명 "resume_text"로 수정 (422 에러 해결)
+        Map<String, String> request = Map.of("resume_text", text);
         
         try {
             return restTemplate.postForObject(url, request, String.class);

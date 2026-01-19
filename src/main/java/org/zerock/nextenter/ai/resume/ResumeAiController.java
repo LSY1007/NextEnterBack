@@ -18,4 +18,3 @@ public class ResumeAiController {
         return resumeAiService.analyzeResume(text);
     }
 }
-aaaa

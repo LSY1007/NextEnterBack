@@ -26,4 +26,14 @@ public class ResumeAiService {
             return "연동 에러: " + e.getMessage();
         }
     }
+
+    public String recommendCompanies(Map<String, Object> resumeData) {
+        String url = aiServerUrl + "/recommend";
+        
+        try {
+            return restTemplate.postForObject(url, resumeData, String.class);
+        } catch (Exception e) {
+            return "연동 에러: " + e.getMessage();
+        }
+    }
 }

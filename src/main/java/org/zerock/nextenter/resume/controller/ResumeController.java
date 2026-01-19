@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.Resource;
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -31,6 +32,32 @@ public class ResumeController {
 
     private final ResumeService resumeService;
     private final PortfolioService portfolioService;
+
+    // ==================== 인재 검색 API ====================
+
+    @Operation(summary = "인재 검색", description = "공개된 이력서를 검색합니다 (기업 회원용)")
+    @GetMapping("/search")
+    public ResponseEntity<Page<TalentSearchResponse>> searchTalents(
+            @Parameter(description = "직무 카테고리 (예: 프론트엔드 개발자, 백엔드 개발자)")
+            @RequestParam(required = false) String jobCategory,
+
+            @Parameter(description = "검색 키워드 (기술 스택)")
+            @RequestParam(required = false) String keyword,
+
+            @Parameter(description = "페이지 번호 (0부터 시작)", example = "0")
+            @RequestParam(defaultValue = "0") int page,
+
+            @Parameter(description = "페이지 크기", example = "10")
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        log.info("GET /api/resume/search - jobCategory: {}, keyword: {}, page: {}", 
+                jobCategory, keyword, page);
+
+        Page<TalentSearchResponse> talents = resumeService.searchTalents(
+                jobCategory, keyword, page, size);
+
+        return ResponseEntity.ok(talents);
+    }
 
     // ==================== 이력서 API ====================
 

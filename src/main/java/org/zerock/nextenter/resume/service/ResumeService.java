@@ -2,16 +2,23 @@ package org.zerock.nextenter.resume.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import org.zerock.nextenter.resume.dto.ResumeListResponse;
 import org.zerock.nextenter.resume.dto.ResumeRequest;
 import org.zerock.nextenter.resume.dto.ResumeResponse;
+import org.zerock.nextenter.resume.dto.TalentSearchResponse;
 import org.zerock.nextenter.resume.entity.Resume;
 import org.zerock.nextenter.resume.repository.ResumeRepository;
+import org.zerock.nextenter.user.entity.User;
+import org.zerock.nextenter.user.repository.UserRepository;
 
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -23,6 +30,7 @@ public class ResumeService {
 
     private final ResumeRepository resumeRepository;
     private final FileStorageService fileStorageService;
+    private final UserRepository userRepository;
 
     // 이력서 목록 조회
     public List<ResumeListResponse> getResumeList(Long userId) {
@@ -93,7 +101,7 @@ public class ResumeService {
                 .userId(userId)
                 .title(request.getTitle())
                 .jobCategory(request.getJobCategory())
-                .structuredData(request.getSections())  // ✅ sections로 수정
+                .structuredData(request.getSections())
                 .status(request.getStatus() != null ? request.getStatus() : "DRAFT")
                 .build();
 
@@ -103,7 +111,6 @@ public class ResumeService {
         return convertToResponse(resume);
     }
 
-    // updateResume 메서드 수정
     @Transactional
     public ResumeResponse updateResume(Long resumeId, ResumeRequest request, Long userId) {
         log.info("이력서 수정 - resumeId: {}, userId: {}", resumeId, userId);
@@ -113,7 +120,6 @@ public class ResumeService {
                 .orElseThrow(() -> new IllegalArgumentException(
                         "이력서를 찾을 수 없거나 접근 권한이 없습니다"));
 
-        // 수정할 필드만 업데이트
         if (request.getTitle() != null) {
             resume.setTitle(request.getTitle());
         }
@@ -142,7 +148,6 @@ public class ResumeService {
                 .orElseThrow(() -> new IllegalArgumentException(
                         "이력서를 찾을 수 없거나 접근 권한이 없습니다"));
 
-        // 파일 삭제
         if (resume.getFilePath() != null) {
             try {
                 String filename = resume.getFilePath().substring(
@@ -153,9 +158,48 @@ public class ResumeService {
             }
         }
 
-        // ✅ 물리적 삭제 (DB에서 완전히 제거)
         resumeRepository.delete(resume);
         log.info("이력서 물리적 삭제 완료 - resumeId: {}", resumeId);
+    }
+
+    /**
+     * 인재 검색
+     */
+    public Page<TalentSearchResponse> searchTalents(
+            String jobCategory, String keyword, int page, int size) {
+        
+        log.info("인재 검색 - jobCategory: {}, keyword: {}, page: {}", jobCategory, keyword, page);
+
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Resume> resumePage = resumeRepository.searchTalents(jobCategory, keyword, pageable);
+
+        return resumePage.map(resume -> {
+            User user = userRepository.findById(resume.getUserId())
+                    .orElse(null);
+
+            // 이름 마스킹 (예: 김철수 -> 김**)
+            String maskedName = user != null ? maskName(user.getName()) : "익명";
+
+            // 기술 스택 파싱
+            List<String> skillsList = parseSkills(resume.getSkills());
+
+            // 매칭 점수 계산 (임시로 80-95 사이 랜덤)
+            int matchScore = 80 + (int)(Math.random() * 16);
+
+            return TalentSearchResponse.builder()
+                    .resumeId(resume.getResumeId())
+                    .userId(resume.getUserId())
+                    .name(maskedName)
+                    .jobCategory(resume.getJobCategory())
+                    .skills(skillsList)
+                    .location("서울") // TODO: User 엔티티에 location 필드 추가 필요
+                    .experienceYears(5) // TODO: structuredData에서 파싱 필요
+                    .salaryRange("5,000~7,000만원") // TODO: structuredData에서 파싱 필요
+                    .matchScore(matchScore)
+                    .isAvailable(true) // TODO: User 엔티티에 isAvailable 필드 추가 필요
+                    .viewCount(resume.getViewCount())
+                    .build();
+        });
     }
 
     // Private Methods
@@ -197,5 +241,23 @@ public class ResumeService {
             return "";
         }
         return filename.substring(filename.lastIndexOf(".") + 1);
+    }
+
+    private String maskName(String name) {
+        if (name == null || name.length() < 2) {
+            return "익명";
+        }
+        return name.charAt(0) + "**";
+    }
+
+    private List<String> parseSkills(String skills) {
+        if (skills == null || skills.isEmpty()) {
+            return List.of();
+        }
+        // 쉼표로 구분된 스킬 문자열을 리스트로 변환
+        return Arrays.stream(skills.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(Collectors.toList());
     }
 }

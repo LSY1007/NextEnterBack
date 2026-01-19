@@ -1,5 +1,7 @@
 package org.zerock.nextenter.resume.repository;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -37,4 +39,15 @@ public interface ResumeRepository extends JpaRepository<Resume, Long> {
     @Modifying
     @Query("UPDATE Resume r SET r.viewCount = r.viewCount + 1 WHERE r.resumeId = :resumeId")
     void incrementViewCount(@Param("resumeId") Long resumeId);
+
+    // 인재 검색 - 공개된 이력서 중 검색 (페이징)
+    @Query("SELECT r FROM Resume r WHERE r.visibility = 'PUBLIC' AND r.deletedAt IS NULL " +
+            "AND (:jobCategory IS NULL OR r.jobCategory = :jobCategory) " +
+            "AND (:keyword IS NULL OR r.skills LIKE %:keyword% OR r.jobCategory LIKE %:keyword%) " +
+            "ORDER BY r.createdAt DESC")
+    Page<Resume> searchTalents(
+            @Param("jobCategory") String jobCategory,
+            @Param("keyword") String keyword,
+            Pageable pageable
+    );
 }

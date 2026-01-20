@@ -16,6 +16,8 @@ import org.zerock.nextenter.apply.dto.ApplyResponse;
 import org.zerock.nextenter.apply.dto.ApplyStatusUpdateRequest;
 import org.zerock.nextenter.apply.service.ApplyService;
 
+import java.util.List;
+
 @Tag(name = "Apply", description = "지원 관리 API")
 @RestController
 @RequestMapping("/api/applies")
@@ -39,6 +41,19 @@ public class ApplyController {
         ApplyResponse apply = applyService.createApply(userId, request);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(apply);
+    }
+
+    @Operation(summary = "내 지원 내역 조회", description = "개인회원이 자신의 모든 지원 내역을 조회합니다")
+    @GetMapping("/my")
+    public ResponseEntity<List<ApplyListResponse>> getMyApplies(
+            @Parameter(description = "사용자 ID", required = true)
+            @RequestHeader("userId") Long userId
+    ) {
+        log.info("GET /api/applies/my - userId: {}", userId);
+
+        List<ApplyListResponse> applies = applyService.getMyApplies(userId);
+
+        return ResponseEntity.ok(applies);
     }
 
     @Operation(summary = "기업 지원자 목록 조회", description = "기업에 지원한 모든 지원자 목록을 조회합니다")
@@ -99,5 +114,25 @@ public class ApplyController {
                 applyService.updateApplyStatus(applyId, companyId, request);
 
         return ResponseEntity.ok(apply);
+    }
+
+    @Operation(summary = "내 지원 내역 조회", description = "개인회원이 자신이 지원한 공고 목록을 조회합니다")
+    @GetMapping("/my-applications")
+    public ResponseEntity<Page<ApplyListResponse>> getMyApplications(
+            @Parameter(description = "사용자 ID", required = true)
+            @RequestHeader("userId") Long userId,
+
+            @Parameter(description = "페이지 번호 (0부터 시작)", example = "0")
+            @RequestParam(defaultValue = "0") int page,
+
+            @Parameter(description = "페이지 크기", example = "20")
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        log.info("GET /api/applies/my-applications - userId: {}", userId);
+
+        Page<ApplyListResponse> applies =
+                applyService.getMyApplications(userId, page, size);
+
+        return ResponseEntity.ok(applies);
     }
 }

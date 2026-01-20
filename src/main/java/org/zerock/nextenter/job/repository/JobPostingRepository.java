@@ -67,4 +67,9 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, Long> {
     @Modifying
     @Query("UPDATE JobPosting j SET j.bookmarkCount = j.bookmarkCount + 1 WHERE j.jobId = :jobId")
     void incrementBookmarkCount(@Param("jobId") Long jobId);
+
+    // 북마크 수 감소
+    @Modifying
+    @Query("UPDATE JobPosting j SET j.bookmarkCount = CASE WHEN j.bookmarkCount > 0 THEN j.bookmarkCount - 1 ELSE 0 END WHERE j.jobId = :jobId")
+    void decrementBookmarkCount(@Param("jobId") Long jobId);
 }

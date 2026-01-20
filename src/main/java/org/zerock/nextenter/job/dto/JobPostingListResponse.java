@@ -15,6 +15,7 @@ import java.time.LocalDateTime;
 public class JobPostingListResponse {
 
     private Long jobId;
+    private Long companyId;
     private String title;
     private String companyName;
     private String jobCategory;
@@ -27,5 +28,6 @@ public class JobPostingListResponse {
     private String status;
     private Integer viewCount;
     private Integer applicantCount;
+    private Integer bookmarkCount;
     private LocalDateTime createdAt;
 }

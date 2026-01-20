@@ -76,9 +76,53 @@ public class ApplyService {
                 .build();
 
         apply = applyRepository.save(apply);
+        
+        // 공고의 지원자 수 증가
+        log.info("지원자 수 증가 전 - jobId: {}", request.getJobId());
+        jobPostingRepository.incrementApplicantCount(request.getJobId());
+        log.info("지원자 수 증가 후 - jobId: {}", request.getJobId());
+        
+        // 실제 지원자 수 확인
+        Long actualCount = applyRepository.countByJobId(request.getJobId());
+        log.info("실제 지원자 수 - jobId: {}, count: {}", request.getJobId(), actualCount);
+        
         log.info("지원 완료 - applyId: {}", apply.getApplyId());
 
         return convertToDetailResponse(apply);
+    }
+
+    /**
+     * 내 지원 내역 조회 (개인회원용) - 단순 목록
+     */
+    public List<ApplyListResponse> getMyApplies(Long userId) {
+        log.info("내 지원 내역 조회 - userId: {}", userId);
+
+        List<Apply> applies = applyRepository.findByUserIdOrderByAppliedAtDesc(userId);
+        
+        return applies.stream()
+                .map(this::convertToListResponse)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 내 지원 내역 조회 (개인회원용) - 페이징
+     */
+    public Page<ApplyListResponse> getMyApplications(Long userId, int page, int size) {
+        log.info("내 지원 내역 조회 - userId: {}", userId);
+
+        Pageable pageable = PageRequest.of(page, size);
+        List<Apply> applies = applyRepository.findByUserIdOrderByAppliedAtDesc(userId);
+        
+        // List를 Page로 변환
+        int start = (int) pageable.getOffset();
+        int end = Math.min((start + pageable.getPageSize()), applies.size());
+        List<Apply> pageContent = applies.subList(start, end);
+        
+        Page<Apply> applyPage = new org.springframework.data.domain.PageImpl<>(
+            pageContent, pageable, applies.size()
+        );
+
+        return applyPage.map(this::convertToListResponse);
     }
 
     /**

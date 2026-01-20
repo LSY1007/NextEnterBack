@@ -125,4 +125,27 @@ public class JobPostingController {
 
         return ResponseEntity.ok(response);
     }
+
+    @Operation(summary = "공고 상태 변경")
+    @PatchMapping("/{id}/status")
+    public ResponseEntity<Map<String, String>> updateJobPostingStatus(
+            @Parameter(description = "공고 ID", required = true, example = "1")
+            @PathVariable Long id,
+
+            @Parameter(description = "기업 ID (companyId)", required = true, example = "1")
+            @RequestHeader("companyId") Long companyId,
+
+            @Parameter(description = "상태 변경 요청", required = true)
+            @RequestBody Map<String, String> request
+    ) {
+        log.info("PATCH /api/jobs/{}/status - companyId: {}, status: {}", 
+                id, companyId, request.get("status"));
+
+        jobPostingService.updateJobPostingStatus(id, companyId, request.get("status"));
+
+        Map<String, String> response = new HashMap<>();
+        response.put("message", "success");
+
+        return ResponseEntity.ok(response);
+    }
 }

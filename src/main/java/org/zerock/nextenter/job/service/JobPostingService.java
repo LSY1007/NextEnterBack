@@ -7,10 +7,12 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.zerock.nextenter.apply.repository.ApplyRepository;
 import org.zerock.nextenter.job.dto.JobPostingListResponse;
 import org.zerock.nextenter.job.dto.JobPostingRequest;
 import org.zerock.nextenter.job.dto.JobPostingResponse;
 import org.zerock.nextenter.job.entity.JobPosting;
+import org.zerock.nextenter.job.repository.BookmarkRepository;
 import org.zerock.nextenter.job.repository.JobPostingRepository;
 
 import java.util.List;
@@ -23,6 +25,8 @@ import java.util.stream.Collectors;
 public class JobPostingService {
 
     private final JobPostingRepository jobPostingRepository;
+    private final ApplyRepository applyRepository;
+    private final BookmarkRepository bookmarkRepository;
 
     /**
      * 공고 목록 조회 (필터링 + 검색 + 페이징)
@@ -181,6 +185,25 @@ public class JobPostingService {
     }
 
     /**
+     * 공고 상태 변경
+     */
+    @Transactional
+    public void updateJobPostingStatus(Long jobId, Long companyId, String status) {
+        log.info("공고 상태 변경 - jobId: {}, companyId: {}, status: {}", 
+                jobId, companyId, status);
+
+        JobPosting jobPosting = jobPostingRepository.findByJobIdAndCompanyId(jobId, companyId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "공고를 찾을 수 없거나 권한이 없습니다"));
+
+        // 상태 변경
+        jobPosting.setStatus(JobPosting.Status.valueOf(status.toUpperCase()));
+        jobPostingRepository.save(jobPosting);
+
+        log.info("공고 상태 변경 완료 - jobId: {}, newStatus: {}", jobId, status);
+    }
+
+    /**
      * 기업의 공고 목록 조회
      */
     public List<JobPostingListResponse> getCompanyJobPostings(Long companyId) {
@@ -196,8 +219,14 @@ public class JobPostingService {
 
     // Private Methods
     private JobPostingListResponse convertToListResponse(JobPosting jobPosting) {
+        // 실제 데이터베이스에서 지원자 수 조회
+        Long actualApplicantCount = applyRepository.countByJobId(jobPosting.getJobId());
+        // 실제 데이터베이스에서 북마크 수 조회
+        Long actualBookmarkCount = bookmarkRepository.countByJobPostingId(jobPosting.getJobId());
+        
         return JobPostingListResponse.builder()
                 .jobId(jobPosting.getJobId())
+                .companyId(jobPosting.getCompanyId())
                 .title(jobPosting.getTitle())
                 .companyName("회사명")  // TODO: Company 조인 필요
                 .jobCategory(jobPosting.getJobCategory())
@@ -209,12 +238,21 @@ public class JobPostingService {
                 .deadline(jobPosting.getDeadline())
                 .status(jobPosting.getStatus().name())
                 .viewCount(jobPosting.getViewCount())
-                .applicantCount(jobPosting.getApplicantCount())
+                .applicantCount(actualApplicantCount.intValue())
+                .bookmarkCount(actualBookmarkCount.intValue())
                 .createdAt(jobPosting.getCreatedAt())
                 .build();
     }
 
     private JobPostingResponse convertToResponse(JobPosting jobPosting) {
+        // 실제 데이터베이스에서 지원자 수 조회
+        Long actualApplicantCount = applyRepository.countByJobId(jobPosting.getJobId());
+        // 실제 데이터베이스에서 북마크 수 조회
+        Long actualBookmarkCount = bookmarkRepository.countByJobPostingId(jobPosting.getJobId());
+        
+        log.debug("공고 상세 변환 - jobId: {}, 실제 지원자 수: {}, 실제 북마크 수: {}", 
+                jobPosting.getJobId(), actualApplicantCount, actualBookmarkCount);
+        
         return JobPostingResponse.builder()
                 .jobId(jobPosting.getJobId())
                 .companyId(jobPosting.getCompanyId())
@@ -232,8 +270,8 @@ public class JobPostingService {
                 .deadline(jobPosting.getDeadline())
                 .status(jobPosting.getStatus().name())
                 .viewCount(jobPosting.getViewCount())
-                .applicantCount(jobPosting.getApplicantCount())
-                .bookmarkCount(jobPosting.getBookmarkCount())
+                .applicantCount(actualApplicantCount.intValue())
+                .bookmarkCount(actualBookmarkCount.intValue())
                 .createdAt(jobPosting.getCreatedAt())
                 .updatedAt(jobPosting.getUpdatedAt())
                 .build();

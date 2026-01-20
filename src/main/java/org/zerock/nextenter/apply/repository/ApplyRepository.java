@@ -49,4 +49,8 @@ public interface ApplyRepository extends JpaRepository<Apply, Long> {
             "JOIN JobPosting j ON a.jobId = j.jobId " +
             "WHERE j.companyId = :companyId AND a.status = :status")
     Long countByCompanyIdAndStatus(@Param("companyId") Long companyId, @Param("status") Apply.Status status);
+    
+    // 특정 공고의 지원자 수
+    @Query("SELECT COUNT(a) FROM Apply a WHERE a.jobId = :jobId")
+    Long countByJobId(@Param("jobId") Long jobId);
 }

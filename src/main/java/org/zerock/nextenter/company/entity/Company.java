@@ -69,6 +69,22 @@ public class Company {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    // 기존 필드들 아래에 추가 * 진규 - 기업회원 마이페이지 생성 추가 컬럼들
+    @Column(name = "ceo_name", length = 50)
+    private String ceoName;
+
+    @Column(name = "short_intro", length = 200)
+    private String shortIntro;
+
+    @Column(name = "sns_url", length = 255)
+    private String snsUrl;
+
+    @Column(name = "detail_address", length = 255)
+    private String detailAddress;
+
+    @Column(name = "manager_department", length = 100)
+    private String managerDepartment;
+
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();

@@ -18,6 +18,7 @@ public class JobPostingListResponse {
     private Long companyId;
     private String title;
     private String companyName;
+    private String logoUrl;
     private String jobCategory;
     private String location;
     private Integer experienceMin;

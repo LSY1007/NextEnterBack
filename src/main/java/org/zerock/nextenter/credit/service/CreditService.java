@@ -21,13 +21,21 @@ public class CreditService {
 
     /**
      * 크레딧 잔액 조회
+     * ✅ 크레딧 정보가 없으면 0으로 자동 생성
      */
-    @Transactional(readOnly = true)
+    @Transactional
     public CreditBalanceDto getBalance(Long userId) {
         log.info("크레딧 잔액 조회 - userId: {}", userId);
 
         Credit credit = creditRepository.findByUserId(userId)
-                .orElseThrow(() -> new IllegalArgumentException("크레딧 정보를 찾을 수 없습니다"));
+                .orElseGet(() -> {
+                    log.info("신규 크레딧 생성 (초기값 0) - userId: {}", userId);
+                    Credit newCredit = Credit.builder()
+                            .userId(userId)
+                            .balance(0)
+                            .build();
+                    return creditRepository.save(newCredit);
+                });
 
         return CreditBalanceDto.fromEntity(credit);
     }

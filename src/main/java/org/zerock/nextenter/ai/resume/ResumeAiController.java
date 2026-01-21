@@ -1,55 +1,48 @@
 package org.zerock.nextenter.ai.resume;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.zerock.nextenter.ai.resume.dto.AiRecommendRequest;
 import org.zerock.nextenter.ai.resume.dto.AiRecommendResponse;
 import org.zerock.nextenter.ai.resume.service.ResumeAiRecommendService;
 
 import java.util.List;
-import java.util.Map;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/ai/resume")
 @RequiredArgsConstructor
+@CrossOrigin(origins = "http://localhost:5173")
 public class ResumeAiController {
 
-    private final ResumeAiService resumeAiService;
     private final ResumeAiRecommendService resumeAiRecommendService;
 
-    @GetMapping("/test")
-    public String testAnalyze(@RequestParam String text) {
-        return resumeAiService.analyzeResume(text);
-    }
-
-    // 기존: DB 저장 없이 AI 결과만 반환
+    /**
+     * AI 추천 요청 및 결과 저장
+     */
     @PostMapping("/recommend")
-    public String testRecommend(@RequestBody Map<String, Object> resumeData) {
-        return resumeAiService.recommendCompanies(resumeData);
+    public ResponseEntity<AiRecommendResponse> recommendAndSave(@RequestBody AiRecommendRequest request) {
+        log.info("📥 [Controller] AI 추천 요청 수신: resumeId={}, userId={}", request.getResumeId(), request.getUserId());
+        
+        try {
+            AiRecommendResponse response = resumeAiRecommendService.recommendAndSave(request);
+            log.info("✅ [Controller] 요청 처리 완료: recommendId={}", response.getRecommendId());
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("❌ [Controller] 분석 실패: {}", e.getMessage());
+            // 상세 에러 메시지를 포함하여 예외를 던집니다.
+            throw new RuntimeException("AI 분석 요청 처리 중 오류가 발생했습니다: " + e.getMessage());
+        }
     }
 
-    // 신규: AI 추천 + DB 저장
-    @PostMapping("/recommend/save")
-    public AiRecommendResponse recommendAndSave(@RequestBody AiRecommendRequest request) {
-        return resumeAiRecommendService.recommendAndSave(request);
-    }
-
-    // 신규: 저장된 추천 이력 조회 (이력서 ID 기준)
-    @GetMapping("/recommend/history/resume/{resumeId}")
-    public List<AiRecommendResponse> getHistoryByResume(@PathVariable Long resumeId) {
-        return resumeAiRecommendService.getHistoryByResumeId(resumeId);
-    }
-
-    // 신규: 저장된 추천 이력 조회 (사용자 ID 기준)
-    @GetMapping("/recommend/history/user/{userId}")
-    public List<AiRecommendResponse> getHistoryByUser(@PathVariable Long userId) {
-        return resumeAiRecommendService.getHistoryByUserId(userId);
-    }
-
-    // 신규: 특정 추천 결과 조회
-    @GetMapping("/recommend/{recommendId}")
-    public AiRecommendResponse getRecommend(@PathVariable Long recommendId) {
-        return resumeAiRecommendService.getRecommendById(recommendId);
+    /**
+     * 사용자별 추천 이력 조회
+     */
+    @GetMapping("/history/user/{userId}")
+    public ResponseEntity<List<AiRecommendResponse>> getHistoryByUser(@PathVariable Long userId) {
+        log.info("📥 [Controller] 히스토리 조회 요청: userId={}", userId);
+        return ResponseEntity.ok(resumeAiRecommendService.getHistoryByUserId(userId));
     }
 }
-

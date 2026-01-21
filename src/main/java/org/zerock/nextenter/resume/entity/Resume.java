@@ -51,7 +51,7 @@ public class Resume {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    private Visibility visibility = Visibility.PRIVATE;
+    private Visibility visibility = Visibility.PUBLIC;  // ✅ 기본값 PUBLIC으로 변경
 
     @Column(name = "view_count", nullable = false)
     private Integer viewCount = 0;
@@ -91,7 +91,7 @@ public class Resume {
             this.isMain = false;
         }
         if (this.visibility == null) {
-            this.visibility = Visibility.PRIVATE;
+            this.visibility = Visibility.PUBLIC;  // ✅ 기본값 PUBLIC
         }
     }
 

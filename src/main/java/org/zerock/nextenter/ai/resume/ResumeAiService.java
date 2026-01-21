@@ -23,11 +23,21 @@ public class ResumeAiService {
 
     public String analyzeResume(String text) {
         String url = aiServerUrl + "/analyze";
-        // 파이썬 서버가 요구하는 필드명 "resume_text"로 수정 (422 에러 해결)
-        Map<String, String> request = Map.of("resume_text", text);
 
         try {
-            return restTemplate.postForObject(url, request, String.class);
+            // ✅ recommendCompanies와 동일한 방식으로 수정 (JSON 형식 명시)
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            // 파이썬 서버가 요구하는 필드명 "resume_text"로 객체 생성
+            Map<String, String> requestBody = Map.of("resume_text", text);
+            
+            // ObjectMapper로 JSON 문자열로 변환
+            String jsonBody = objectMapper.writeValueAsString(requestBody);
+            HttpEntity<String> entity = new HttpEntity<>(jsonBody, headers);
+
+            ResponseEntity<String> response = restTemplate.postForEntity(url, entity, String.class);
+            return response.getBody();
         } catch (Exception e) {
             return "연동 에러: " + e.getMessage();
         }

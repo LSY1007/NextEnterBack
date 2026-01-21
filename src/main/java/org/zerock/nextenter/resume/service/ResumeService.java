@@ -1,5 +1,7 @@
 package org.zerock.nextenter.resume.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -18,6 +20,8 @@ import org.zerock.nextenter.user.entity.User;
 import org.zerock.nextenter.user.repository.UserRepository;
 
 import java.time.LocalDateTime;
+import java.time.Period;
+import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -31,6 +35,7 @@ public class ResumeService {
     private final ResumeRepository resumeRepository;
     private final FileStorageService fileStorageService;
     private final UserRepository userRepository;
+    private final ObjectMapper objectMapper = new ObjectMapper(); // JSON 파싱용
 
     // 이력서 목록 조회
     public List<ResumeListResponse> getResumeList(Long userId) {
@@ -53,6 +58,32 @@ public class ResumeService {
                 .findByResumeIdAndUserIdAndDeletedAtIsNull(resumeId, userId)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "이력서를 찾을 수 없거나 접근 권한이 없습니다"));
+
+        // 조회수 증가
+        resumeRepository.incrementViewCount(resumeId);
+
+        return convertToResponse(resume);
+    }
+
+    // 공개 이력서 조회 (기업회원용)
+    @Transactional
+    public ResumeResponse getPublicResumeDetail(Long resumeId) {
+        log.info("공개 이력서 조회 - resumeId: {}", resumeId);
+
+        Resume resume = resumeRepository
+                .findById(resumeId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "이력서를 찾을 수 없습니다"));
+
+        // 삭제된 이력서 확인
+        if (resume.getDeletedAt() != null) {
+            throw new IllegalArgumentException("삭제된 이력서입니다");
+        }
+
+        // 공개 여부 확인
+        if (resume.getVisibility() != Resume.Visibility.PUBLIC) {
+            throw new IllegalArgumentException("비공개 이력서는 조회할 수 없습니다");
+        }
 
         // 조회수 증가
         resumeRepository.incrementViewCount(resumeId);
@@ -96,17 +127,32 @@ public class ResumeService {
     @Transactional
     public ResumeResponse createResume(ResumeRequest request, Long userId) {
         log.info("이력서 생성 - userId: {}, title: {}", userId, request.getTitle());
+        log.info("전달받은 skills: {}", request.getSkills());
+
+        // ✅ visibility 처리 추가
+        Resume.Visibility visibility = Resume.Visibility.PUBLIC; // ✅ 기본값 PUBLIC
+        if (request.getVisibility() != null) {
+            try {
+                visibility = Resume.Visibility.valueOf(request.getVisibility().toUpperCase());
+                log.info("설정된 visibility: {}", visibility);
+            } catch (IllegalArgumentException e) {
+                log.warn("잘못된 visibility 값: {}, 기본값 PRIVATE 사용", request.getVisibility());
+            }
+        }
 
         Resume resume = Resume.builder()
                 .userId(userId)
                 .title(request.getTitle())
                 .jobCategory(request.getJobCategory())
                 .structuredData(request.getSections())
+                .skills(request.getSkills())  // ✅ skills 저장
+                .visibility(visibility)  // ✅ visibility 설정
                 .status(request.getStatus() != null ? request.getStatus() : "DRAFT")
                 .build();
 
         resume = resumeRepository.save(resume);
-        log.info("이력서 생성 완료 - resumeId: {}", resume.getResumeId());
+        log.info("이력서 생성 완료 - resumeId: {}, visibility: {}, skills: {}", 
+            resume.getResumeId(), resume.getVisibility(), resume.getSkills());
 
         return convertToResponse(resume);
     }
@@ -114,6 +160,7 @@ public class ResumeService {
     @Transactional
     public ResumeResponse updateResume(Long resumeId, ResumeRequest request, Long userId) {
         log.info("이력서 수정 - resumeId: {}, userId: {}", resumeId, userId);
+        log.info("전달받은 skills: {}", request.getSkills());
 
         Resume resume = resumeRepository
                 .findByResumeIdAndUserIdAndDeletedAtIsNull(resumeId, userId)
@@ -132,9 +179,27 @@ public class ResumeService {
         if (request.getStatus() != null) {
             resume.setStatus(request.getStatus());
         }
+        
+        // ✅ skills 업데이트 추가
+        if (request.getSkills() != null) {
+            resume.setSkills(request.getSkills());
+            log.info("업데이트된 skills: {}", request.getSkills());
+        }
+        
+        // ✅ visibility 업데이트 추가
+        if (request.getVisibility() != null) {
+            try {
+                Resume.Visibility visibility = Resume.Visibility.valueOf(request.getVisibility().toUpperCase());
+                resume.setVisibility(visibility);
+                log.info("업데이트된 visibility: {}", visibility);
+            } catch (IllegalArgumentException e) {
+                log.warn("잘못된 visibility 값: {}, 업데이트 건너뛴", request.getVisibility());
+            }
+        }
 
         resume = resumeRepository.save(resume);
-        log.info("이력서 수정 완료 - resumeId: {}", resume.getResumeId());
+        log.info("이력서 수정 완료 - resumeId: {}, visibility: {}, skills: {}", 
+            resume.getResumeId(), resume.getVisibility(), resume.getSkills());
 
         return convertToResponse(resume);
     }
@@ -174,14 +239,36 @@ public class ResumeService {
         Page<Resume> resumePage = resumeRepository.searchTalents(jobCategory, keyword, pageable);
 
         return resumePage.map(resume -> {
-            User user = userRepository.findById(resume.getUserId())
-                    .orElse(null);
+            log.info("파싱 중인 이력서 - resumeId: {}, userId: {}, title: {}", 
+                resume.getResumeId(), resume.getUserId(), resume.getTitle());
+            log.info("structuredData: {}", resume.getStructuredData());
+            
+            // ✅ structuredData에서 실제 이력서 이름 추출
+            String realName = extractName(resume.getStructuredData());
+            
+            // ✅ 이력서에 이름이 없으면 User 테이블의 이름 사용
+            if (realName == null || realName.isEmpty() || realName.equals("익명")) {
+                User user = userRepository.findById(resume.getUserId()).orElse(null);
+                if (user != null && user.getName() != null && !user.getName().isEmpty()) {
+                    realName = user.getName();
+                    log.info("이력서에 이름 없음, User 이름 사용: {}", realName);
+                }
+            }
 
             // 이름 마스킹 (예: 김철수 -> 김**)
-            String maskedName = user != null ? maskName(user.getName()) : "익명";
+            String maskedName = maskName(realName);
+            log.info("원래 이름: {}, 마스킹 이름: {}", realName, maskedName);
 
             // 기술 스택 파싱
             List<String> skillsList = parseSkills(resume.getSkills());
+            log.info("기술 스택: {}", skillsList);
+
+            // ✅ structuredData에서 실제 데이터 추출
+            String location = extractLocation(resume.getStructuredData());
+            int experienceYears = calculateExperienceYears(resume.getStructuredData());
+            String salaryRange = extractSalaryRange(resume.getStructuredData());
+            
+            log.info("추출된 데이터 - 지역: {}, 경력: {}년, 연봉: {}", location, experienceYears, salaryRange);
 
             // 매칭 점수 계산 (임시로 80-95 사이 랜덤)
             int matchScore = 80 + (int)(Math.random() * 16);
@@ -192,9 +279,9 @@ public class ResumeService {
                     .name(maskedName)
                     .jobCategory(resume.getJobCategory())
                     .skills(skillsList)
-                    .location("서울") // TODO: User 엔티티에 location 필드 추가 필요
-                    .experienceYears(5) // TODO: structuredData에서 파싱 필요
-                    .salaryRange("5,000~7,000만원") // TODO: structuredData에서 파싱 필요
+                    .location(location)
+                    .experienceYears(experienceYears)
+                    .salaryRange(salaryRange)
                     .matchScore(matchScore)
                     .isAvailable(true) // TODO: User 엔티티에 isAvailable 필드 추가 필요
                     .viewCount(resume.getViewCount())
@@ -247,7 +334,18 @@ public class ResumeService {
         if (name == null || name.length() < 2) {
             return "익명";
         }
+        
+        // 한글 이름인 경우: 성만 표시 (예: "김철수" -> "김**")
+        if (isKorean(name.charAt(0))) {
+            return name.charAt(0) + "**";
+        }
+        
+        // 영문 이름인 경우: 첫 글자만 표시 (예: "admin" -> "a**", "John" -> "J**")
         return name.charAt(0) + "**";
+    }
+    
+    private boolean isKorean(char c) {
+        return (c >= '\uac00' && c <= '\ud7a3');
     }
 
     private List<String> parseSkills(String skills) {
@@ -259,5 +357,165 @@ public class ResumeService {
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * structuredData에서 지역 추출
+     */
+    private String extractLocation(String structuredData) {
+        if (structuredData == null || structuredData.isEmpty()) {
+            return "미지정";
+        }
+
+        try {
+            JsonNode root = objectMapper.readTree(structuredData);
+            JsonNode personalInfo = root.get("personalInfo");
+            
+            if (personalInfo != null && personalInfo.has("address")) {
+                String address = personalInfo.get("address").asText();
+                // 주소에서 시/도 추출 (예: "서울특별시 강남구" -> "서울")
+                if (address.contains("서울")) return "서울";
+                if (address.contains("경기")) return "경기";
+                if (address.contains("부산")) return "부산";
+                if (address.contains("대구")) return "대구";
+                if (address.contains("인천")) return "인천";
+                if (address.contains("광주")) return "광주";
+                if (address.contains("대전")) return "대전";
+                if (address.contains("울산")) return "울산";
+                if (address.contains("세종")) return "세종";
+                return address.split(" ")[0]; // 처음 단어 반환
+            }
+        } catch (Exception e) {
+            log.warn("지역 추출 실패: {}", e.getMessage());
+        }
+
+        return "미지정";
+    }
+
+    /**
+     * structuredData에서 경력 년수 계산
+     */
+    private int calculateExperienceYears(String structuredData) {
+        if (structuredData == null || structuredData.isEmpty()) {
+            return 0;
+        }
+
+        try {
+            JsonNode root = objectMapper.readTree(structuredData);
+            JsonNode careers = root.get("careers");
+            
+            if (careers != null && careers.isArray() && careers.size() > 0) {
+                int totalMonths = 0;
+                
+                for (JsonNode career : careers) {
+                    if (career.has("period")) {
+                        String period = career.get("period").asText();
+                        // period 형식: "2019.2 ~ 2023.5" 또는 "2019. 2 ~ 2023.5"
+                        totalMonths += parsePeriodToMonths(period);
+                    }
+                }
+                
+                return totalMonths / 12; // 개월을 년으로 변환
+            }
+        } catch (Exception e) {
+            log.warn("경력 계산 실패: {}", e.getMessage());
+        }
+
+        return 0; // 경력 없음 = 신입
+    }
+
+    /**
+     * 기간 문자열을 개월수로 변환
+     */
+    private int parsePeriodToMonths(String period) {
+        try {
+            // "2019.2 ~ 2023.5" 형식 파싱
+            String[] parts = period.split("~");
+            if (parts.length != 2) return 0;
+            
+            String start = parts[0].trim().replace(" ", "");
+            String end = parts[1].trim().replace(" ", "");
+            
+            // "2019.2" -> [2019, 2]
+            String[] startParts = start.split("\\.");
+            String[] endParts = end.split("\\.");
+            
+            if (startParts.length >= 2 && endParts.length >= 2) {
+                int startYear = Integer.parseInt(startParts[0]);
+                int startMonth = Integer.parseInt(startParts[1]);
+                int endYear = Integer.parseInt(endParts[0]);
+                int endMonth = Integer.parseInt(endParts[1]);
+                
+                return (endYear - startYear) * 12 + (endMonth - startMonth);
+            }
+        } catch (Exception e) {
+            log.warn("기간 파싱 실패: {}", period);
+        }
+        return 0;
+    }
+
+    /**
+     * structuredData에서 이름 추출
+     */
+    private String extractName(String structuredData) {
+        if (structuredData == null || structuredData.isEmpty()) {
+            log.warn("structuredData가 비어있음");
+            return "익명";
+        }
+
+        try {
+            log.info("이름 추출 시도 - structuredData: {}", structuredData.substring(0, Math.min(200, structuredData.length())));
+            JsonNode root = objectMapper.readTree(structuredData);
+            JsonNode personalInfo = root.get("personalInfo");
+            
+            if (personalInfo != null) {
+                log.info("personalInfo 존재: {}", personalInfo.toString());
+                if (personalInfo.has("name")) {
+                    String name = personalInfo.get("name").asText();
+                    log.info("추출된 이름: '{}'", name);
+                    if (name != null && !name.isEmpty() && !name.equals("null")) {
+                        return name;
+                    }
+                } else {
+                    log.warn("personalInfo에 name 필드가 없음");
+                }
+            } else {
+                log.warn("structuredData에 personalInfo가 없음");
+            }
+        } catch (Exception e) {
+            log.error("이름 추출 실패: {}", e.getMessage(), e);
+        }
+
+        return "익명";
+    }
+
+    /**
+     * structuredData에서 희망연봉 추출
+     */
+    private String extractSalaryRange(String structuredData) {
+        if (structuredData == null || structuredData.isEmpty()) {
+            return "협의";
+        }
+
+        try {
+            JsonNode root = objectMapper.readTree(structuredData);
+            
+            // structuredData에 salaryRange 필드가 있다면 사용
+            if (root.has("salaryRange")) {
+                return root.get("salaryRange").asText();
+            }
+            
+            // 없으면 경력에 따라 기본값 추정
+            int experienceYears = calculateExperienceYears(structuredData);
+            if (experienceYears == 0) return "신입";
+            if (experienceYears <= 2) return "3,000~4,000만원";
+            if (experienceYears <= 4) return "4,000~5,500만원";
+            if (experienceYears <= 7) return "5,000~7,000만원";
+            return "7,000만원 이상";
+        } catch (Exception e) {
+            log.warn("희망연봉 추출 실패: {}", e.getMessage());
+        }
+
+        return "협의";
     }
 }

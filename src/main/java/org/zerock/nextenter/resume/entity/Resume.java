@@ -47,13 +47,16 @@ public class Resume {
 
     // 메타 정보
     @Column(name = "is_main", nullable = false)
+    @Builder.Default
     private Boolean isMain = false;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
+    @Builder.Default
     private Visibility visibility = Visibility.PUBLIC;  // ✅ 기본값 PUBLIC으로 변경
 
     @Column(name = "view_count", nullable = false)
+    @Builder.Default
     private Integer viewCount = 0;
 
     // AI 추천 (LONGTEXT) - 나중에 추천 기능 구현 시 사용
@@ -62,6 +65,7 @@ public class Resume {
 
     // 상태
     @Column(nullable = false, length = 20)
+    @Builder.Default
     private String status = "DRAFT";  // DRAFT, COMPLETED
 
     // 타임스탬프

@@ -1,6 +1,5 @@
 package org.zerock.nextenter.company.controller;
 
-
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -136,4 +135,98 @@ public class CompanyController {
         }
     }
 
+    /**
+     * 기업 프로필 조회
+     */
+    @Operation(summary = "기업 프로필 조회")
+    @GetMapping("/{companyId}/profile")
+    public ResponseEntity<Map<String, Object>> getCompanyProfile(@PathVariable Long companyId) {
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            CompanyProfileDTO profile = companyService.getCompanyProfile(companyId);
+            response.put("success", true);
+            response.put("data", profile); // 프론트에서는 response.data.data로 접근해야 함
+            return ResponseEntity.ok(response);
+
+        } catch (IllegalArgumentException e) {
+            response.put("success", false);
+            response.put("message", e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+
+        } catch (Exception e) {
+            log.error("기업 프로필 조회 오류", e);
+            response.put("success", false);
+            response.put("message", "서버 오류가 발생했습니다.");
+            return ResponseEntity.internalServerError().body(response);
+        }
+    }
+
+    /**
+     * 기업 프로필 수정 (여기가 없어서 아까 저장이 안 된 겁니다!)
+     */
+    @Operation(summary = "기업 프로필 수정")
+    @PutMapping("/{companyId}/profile")
+    public ResponseEntity<Map<String, Object>> updateCompanyProfile(
+            @PathVariable Long companyId,
+            @RequestBody CompanyProfileDTO dto) {
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            CompanyProfileDTO updated = companyService.updateCompanyProfile(companyId, dto);
+            response.put("success", true);
+            response.put("message", "기업 정보가 저장되었습니다.");
+            response.put("data", updated);
+            return ResponseEntity.ok(response);
+
+        } catch (IllegalArgumentException e) {
+            response.put("success", false);
+            response.put("message", e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+
+        } catch (Exception e) {
+            log.error("기업 프로필 수정 오류", e);
+            response.put("success", false);
+            response.put("message", "서버 오류가 발생했습니다.");
+            return ResponseEntity.internalServerError().body(response);
+        }
+    }
+    /*
+     * 비밀번호 변경
+     * PUT /api/company/{companyId}/password
+     */
+    @Operation(summary = "기업 비밀번호 변경")
+    @PostMapping("/{companyId}/password")
+    public ResponseEntity<Map<String, Object>> changePassword(
+            @PathVariable Long companyId,
+            @RequestBody Map<String, String> request) {
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            String currentPassword = request.get("currentPassword");
+            String newPassword = request.get("newPassword");
+
+            if (currentPassword == null || newPassword == null) {
+                response.put("success", false);
+                response.put("message", "현재 비밀번호와 새 비밀번호를 입력해주세요.");
+                return ResponseEntity.badRequest().body(response);
+            }
+
+            companyService.changePassword(companyId, currentPassword, newPassword);
+            response.put("success", true);
+            response.put("message", "비밀번호가 변경되었습니다.");
+            return ResponseEntity.ok(response);
+
+        }  catch (IllegalArgumentException e) {
+            response.put("success", false);
+            response.put("message", e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+
+        } catch (Exception e) {
+            log.error("비밀변경 변경 오류", e);
+            response.put("success", false);
+            response.put("message", "서버 오류가 발생했습니다.");
+            return ResponseEntity.internalServerError().body(response);
+        }
+    }
 }

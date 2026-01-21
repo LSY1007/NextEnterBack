@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.zerock.nextenter.company.dto.CompanyLoginRequest;
 import org.zerock.nextenter.company.dto.CompanyLoginResponse;
+import org.zerock.nextenter.company.dto.CompanyProfileDTO;
 import org.zerock.nextenter.company.dto.CompanyRegisterRequest;
 import org.zerock.nextenter.company.dto.CompanyResponse;
 import org.zerock.nextenter.company.entity.Company;
@@ -154,5 +155,127 @@ public class CompanyService {
         companyRepository.delete(company);
 
         log.info("기업 회원탈퇴 완료: companyId={}, email={}", companyId, company.getEmail());
+    }
+
+    /**
+     * 기업 프로필 조회
+     */
+    @Transactional(readOnly = true)
+    public CompanyProfileDTO getCompanyProfile(Long companyId) {
+        Company company = companyRepository.findById(companyId)
+                .orElseThrow(() -> new IllegalArgumentException("기업 정보를 찾을 수 없습니다."));
+
+        return CompanyProfileDTO.builder()
+                .companyId(company.getCompanyId())
+                .companyName(company.getCompanyName())
+                .businessNumber(company.getBusinessNumber())
+                .email(company.getEmail())
+                .industry(company.getIndustry())
+                .employeeCount(company.getEmployeeCount())
+                .logoUrl(company.getLogoUrl())
+                .website(company.getWebsite())
+                .address(company.getAddress())
+                .description(company.getDescription())
+                .isActive(company.getIsActive())
+                .managerName(company.getName())
+                .managerPhone(company.getPhone())
+                .companySize(convertEmployeeCountToSize(company.getEmployeeCount()))
+
+                // 진규 - 기업회원 마이페이지 ✅ [추가됨] 새로 추가된 필드 매핑
+                .ceoName(company.getCeoName())
+                .shortIntro(company.getShortIntro())
+                .snsUrl(company.getSnsUrl())
+                .detailAddress(company.getDetailAddress())
+                .managerDepartment(company.getManagerDepartment())
+                .build();
+    }
+
+    /**
+     * 기업 프로필 수정
+     */
+    @Transactional
+    public CompanyProfileDTO updateCompanyProfile(Long companyId, CompanyProfileDTO dto) {
+        Company company = companyRepository.findById(companyId)
+                .orElseThrow(() -> new IllegalArgumentException("기업 정보를 찾을 수 없습니다."));
+
+        // 수정 가능한 필드만 업데이트 (DB에 있는 컨럼만)
+        if (dto.getAddress() != null) {
+            company.setAddress(dto.getAddress());
+        }
+        if (dto.getDescription() != null) {
+            company.setDescription(dto.getDescription());
+        }
+        if (dto.getIndustry() != null) {
+            company.setIndustry(dto.getIndustry());
+        }
+        if (dto.getEmployeeCount() != null) {
+            company.setEmployeeCount(dto.getEmployeeCount());
+        }
+        if (dto.getLogoUrl() != null) {
+            company.setLogoUrl(dto.getLogoUrl());
+        }
+        if (dto.getWebsite() != null) {
+            company.setWebsite(dto.getWebsite());
+        }
+        if (dto.getManagerName() != null) {
+            company.setName(dto.getManagerName());
+        }
+        if (dto.getManagerPhone() != null) {
+            company.setPhone(dto.getManagerPhone());
+        }
+        // 진규 - 기업회원 마이페이지 관련
+        if (dto.getCeoName() != null) {
+            company.setCeoName(dto.getCeoName());
+        }
+        if (dto.getShortIntro() != null) {
+            company.setShortIntro(dto.getShortIntro());
+        }
+        if (dto.getSnsUrl() != null) {
+            company.setSnsUrl(dto.getSnsUrl());
+        }
+        if (dto.getDetailAddress() != null) {
+            company.setDetailAddress(dto.getDetailAddress());
+        }
+        if (dto.getManagerDepartment() != null) {
+            company.setManagerDepartment(dto.getManagerDepartment());
+        }
+
+        Company saved = companyRepository.save(company);
+        log.info("기업 프로필 수정 완료: companyId={}", companyId);
+
+        return getCompanyProfile(saved.getCompanyId());
+    }
+
+    /**
+     * 비밀번호 변경 (현재 비밀번호 확인)
+     */
+    @Transactional
+    public void changePassword(Long companyId, String currentPassword, String newPassword) {
+        Company company = companyRepository.findById(companyId)
+                .orElseThrow(() -> new IllegalArgumentException("기업 정보를 찾을 수 없습니다."));
+
+        // 현재 비밀번호 확인
+        if (!passwordEncoder.matches(currentPassword, company.getPassword())) {
+            throw new IllegalArgumentException("현재 비밀번호가 일치하지 않습니다.");
+        }
+
+        // 새 비밀번호로 변경
+        company.setPassword(passwordEncoder.encode(newPassword));
+        companyRepository.save(company);
+
+        log.info("기업 비밀번호 변경 완료: companyId={}", companyId);
+    }
+
+    /**
+     * 직원 수를 기업 규모 문자열로 변환
+     */
+    private String convertEmployeeCountToSize(Integer employeeCount) {
+        if (employeeCount == null) return "";
+        if (employeeCount <= 10) return "1-10명";
+        if (employeeCount <= 50) return "11-50명";
+        if (employeeCount <= 200) return "51-200명";
+        if (employeeCount <= 500) return "201-500명";
+        if (employeeCount <= 1000) return "501-1000명";
+        return "1000명 이상";
     }
 }

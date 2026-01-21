@@ -1,6 +1,7 @@
 package org.zerock.nextenter.job.service;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -23,6 +24,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 @Transactional(readOnly = true)
 public class BookmarkService {
 
@@ -54,6 +56,7 @@ public class BookmarkService {
 
         // 4. JobPosting의 bookmarkCount 증가
         jobPosting.setBookmarkCount(jobPosting.getBookmarkCount() + 1);
+        jobPostingRepository.save(jobPosting); // 명시적으로 저장
 
         return BookmarkDto.from(saved);
     }
@@ -72,6 +75,7 @@ public class BookmarkService {
         JobPosting jobPosting = jobPostingRepository.findById(jobPostingId).orElse(null);
         if (jobPosting != null && jobPosting.getBookmarkCount() > 0) {
             jobPosting.setBookmarkCount(jobPosting.getBookmarkCount() - 1);
+            jobPostingRepository.save(jobPosting); // 명시적으로 저장
         }
     }
 
@@ -80,29 +84,43 @@ public class BookmarkService {
      */
     @Transactional
     public BookmarkDto toggleBookmark(Long userId, Long jobPostingId) {
-        // 공고 존재 확인
-        JobPosting jobPosting = jobPostingRepository.findById(jobPostingId)
-                .orElseThrow(() -> new IllegalArgumentException("공고를 찾을 수 없습니다"));
+        log.info("북마크 토글 - userId: {}, jobPostingId: {}", userId, jobPostingId);
+        
+        try {
+            // 공고 존재 확인
+            JobPosting jobPosting = jobPostingRepository.findById(jobPostingId)
+                    .orElseThrow(() -> new IllegalArgumentException("공고를 찾을 수 없습니다"));
 
-        Optional<Bookmark> existing = bookmarkRepository.findByUserIdAndJobPostingId(userId, jobPostingId);
+            Optional<Bookmark> existing = bookmarkRepository.findByUserIdAndJobPostingId(userId, jobPostingId);
 
-        if (existing.isPresent()) {
-            // 이미 있으면 삭제
-            bookmarkRepository.delete(existing.get());
-            if (jobPosting.getBookmarkCount() > 0) {
-                jobPosting.setBookmarkCount(jobPosting.getBookmarkCount() - 1);
+            if (existing.isPresent()) {
+                // 이미 있으면 삭제
+                log.info("북마크 삭제 - bookmarkId: {}", existing.get().getBookmarkId());
+                bookmarkRepository.delete(existing.get());
+                if (jobPosting.getBookmarkCount() > 0) {
+                    jobPosting.setBookmarkCount(jobPosting.getBookmarkCount() - 1);
+                    jobPostingRepository.save(jobPosting);
+                }
+                log.info("북마크 삭제 완료 - 현재 북마크 수: {}", jobPosting.getBookmarkCount());
+                return null;
+            } else {
+                // 없으면 추가
+                log.info("북마크 추가 시작");
+                Bookmark bookmark = Bookmark.builder()
+                        .userId(userId)
+                        .jobPostingId(jobPostingId)
+                        .build();
+
+                Bookmark saved = bookmarkRepository.save(bookmark);
+                jobPosting.setBookmarkCount(jobPosting.getBookmarkCount() + 1);
+                jobPostingRepository.save(jobPosting);
+                log.info("북마크 추가 완료 - bookmarkId: {}, 현재 북마크 수: {}", 
+                        saved.getBookmarkId(), jobPosting.getBookmarkCount());
+                return BookmarkDto.from(saved);
             }
-            return null;
-        } else {
-            // 없으면 추가
-            Bookmark bookmark = Bookmark.builder()
-                    .userId(userId)
-                    .jobPostingId(jobPostingId)
-                    .build();
-
-            Bookmark saved = bookmarkRepository.save(bookmark);
-            jobPosting.setBookmarkCount(jobPosting.getBookmarkCount() + 1);
-            return BookmarkDto.from(saved);
+        } catch (Exception e) {
+            log.error("북마크 토글 실패 - userId: {}, jobPostingId: {}", userId, jobPostingId, e);
+            throw e;
         }
     }
 

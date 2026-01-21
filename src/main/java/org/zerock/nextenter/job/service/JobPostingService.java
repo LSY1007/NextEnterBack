@@ -27,6 +27,7 @@ public class JobPostingService {
     private final JobPostingRepository jobPostingRepository;
     private final ApplyRepository applyRepository;
     private final BookmarkRepository bookmarkRepository;
+    private final org.zerock.nextenter.company.repository.CompanyRepository companyRepository;
 
     /**
      * 공고 목록 조회 (필터링 + 검색 + 페이징)
@@ -217,18 +218,31 @@ public class JobPostingService {
                 .collect(Collectors.toList());
     }
 
-    // Private Methods
     private JobPostingListResponse convertToListResponse(JobPosting jobPosting) {
         // 실제 데이터베이스에서 지원자 수 조회
         Long actualApplicantCount = applyRepository.countByJobId(jobPosting.getJobId());
         // 실제 데이터베이스에서 북마크 수 조회
         Long actualBookmarkCount = bookmarkRepository.countByJobPostingId(jobPosting.getJobId());
-        
+
+        // Company 정보 조회
+        String companyName = "회사명";
+        String logoUrl = null;
+        try {
+            var company = companyRepository.findById(jobPosting.getCompanyId());
+            if (company.isPresent()) {
+                companyName = company.get().getCompanyName();
+                logoUrl = company.get().getLogoUrl();
+            }
+        } catch (Exception e) {
+            log.warn("Company 정보 조회 실패 - companyId: {}", jobPosting.getCompanyId());
+        }
+
         return JobPostingListResponse.builder()
                 .jobId(jobPosting.getJobId())
                 .companyId(jobPosting.getCompanyId())
                 .title(jobPosting.getTitle())
-                .companyName("회사명")  // TODO: Company 조인 필요
+                .companyName(companyName)
+                .logoUrl(logoUrl)
                 .jobCategory(jobPosting.getJobCategory())
                 .location(jobPosting.getLocation())
                 .experienceMin(jobPosting.getExperienceMin())
@@ -249,14 +263,28 @@ public class JobPostingService {
         Long actualApplicantCount = applyRepository.countByJobId(jobPosting.getJobId());
         // 실제 데이터베이스에서 북마크 수 조회
         Long actualBookmarkCount = bookmarkRepository.countByJobPostingId(jobPosting.getJobId());
-        
-        log.debug("공고 상세 변환 - jobId: {}, 실제 지원자 수: {}, 실제 북마크 수: {}", 
+
+        log.debug("공고 상세 변환 - jobId: {}, 실제 지원자 수: {}, 실제 북마크 수: {}",
                 jobPosting.getJobId(), actualApplicantCount, actualBookmarkCount);
-        
+
+        // Company 정보 조회
+        String companyName = "회사명";
+        String logoUrl = null;
+        try {
+            var company = companyRepository.findById(jobPosting.getCompanyId());
+            if (company.isPresent()) {
+                companyName = company.get().getCompanyName();
+                logoUrl = company.get().getLogoUrl();
+            }
+        } catch (Exception e) {
+            log.warn("Company 정보 조회 실패 - companyId: {}", jobPosting.getCompanyId());
+        }
+
         return JobPostingResponse.builder()
                 .jobId(jobPosting.getJobId())
                 .companyId(jobPosting.getCompanyId())
-                .companyName("회사명")
+                .companyName(companyName)
+                .logoUrl(logoUrl)
                 .title(jobPosting.getTitle())
                 .jobCategory(jobPosting.getJobCategory())
                 .requiredSkills(jobPosting.getRequiredSkills())

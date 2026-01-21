@@ -19,7 +19,7 @@ public class JobPostingResponse {
     private Long jobId;
     private Long companyId;
     private String companyName;  // Company 조인 시 사용
-
+    private String logoUrl;
     private String title;
     private String jobCategory;
 

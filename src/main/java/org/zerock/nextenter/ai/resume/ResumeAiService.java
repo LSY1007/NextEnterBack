@@ -40,6 +40,24 @@ public class ResumeAiService {
 
         // 1. 🛡️ [방어 로직] 출발 전 데이터 검증 (여기서 걸리면 바로 중단)
         validateRequest(request);
+        try {
+            // ✅ recommendCompanies와 동일한 방식으로 수정 (JSON 형식 명시)
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            // 파이썬 서버가 요구하는 필드명 "resume_text"로 객체 생성
+            Map<String, String> requestBody = Map.of("resume_text", text);
+            
+            // ObjectMapper로 JSON 문자열로 변환
+            String jsonBody = objectMapper.writeValueAsString(requestBody);
+            HttpEntity<String> entity = new HttpEntity<>(jsonBody, headers);
+
+            ResponseEntity<String> response = restTemplate.postForEntity(url, entity, String.class);
+            return response.getBody();
+        } catch (Exception e) {
+            return "연동 에러: " + e.getMessage();
+        }
+    }
 
         try {
             // 2. 헤더 설정 (JSON + UTF-8 명시)

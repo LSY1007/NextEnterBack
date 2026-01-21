@@ -15,8 +15,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.zerock.nextenter.resume.dto.*;
+import org.zerock.nextenter.resume.entity.TalentContact;
 import org.zerock.nextenter.resume.service.PortfolioService;
 import org.zerock.nextenter.resume.service.ResumeService;
+import org.zerock.nextenter.resume.service.TalentService;
 
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
@@ -32,6 +34,7 @@ public class ResumeController {
 
     private final ResumeService resumeService;
     private final PortfolioService portfolioService;
+    private final TalentService talentService;
 
     // ==================== 인재 검색 API ====================
 
@@ -82,6 +85,19 @@ public class ResumeController {
     ) {
         log.info("GET /api/resume/{} - userId: {}", id, userId);
         ResumeResponse resume = resumeService.getResumeDetail(id, userId);
+        return ResponseEntity.ok(resume);
+    }
+
+    @Operation(summary = "공개 이력서 조회 (기업회원용)", description = "공개된 이력서를 조회합니다. 본인 이력서가 아니어도 공개 설정이면 조회 가능합니다.")
+    @GetMapping("/public/{id}")
+    public ResponseEntity<ResumeResponse> getPublicResumeDetail(
+            @Parameter(description = "이력서 ID", required = true, example = "1")
+            @PathVariable Long id,
+            @Parameter(description = "조회자 사용자 ID", required = true, example = "1")
+            @RequestHeader("userId") Long viewerId
+    ) {
+        log.info("GET /api/resume/public/{} - viewerId: {}", id, viewerId);
+        ResumeResponse resume = resumeService.getPublicResumeDetail(id);
         return ResponseEntity.ok(resume);
     }
 
@@ -152,6 +168,82 @@ public class ResumeController {
 
         Map<String, String> response = new HashMap<>();
         response.put("message", "deleted");
+
+        return ResponseEntity.ok(response);
+    }
+
+    @Operation(summary = "인재 저장 (북마크)", description = "인재를 저장합니다")
+    @PostMapping("/save/{resumeId}")
+    public ResponseEntity<Map<String, Object>> saveTalent(
+            @Parameter(description = "이력서 ID", required = true)
+            @PathVariable Long resumeId,
+            @Parameter(description = "기업 회원 ID", required = true)
+            @RequestHeader("userId") Long companyUserId
+    ) {
+        log.info("POST /api/resume/save/{} - companyUserId: {}", resumeId, companyUserId);
+
+        boolean saved = talentService.saveTalent(companyUserId, resumeId);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", saved);
+        response.put("message", saved ? "인재가 저장되었습니다" : "이미 저장된 인재입니다");
+
+        return ResponseEntity.ok(response);
+    }
+
+    @Operation(summary = "인재 저장 취소", description = "저장된 인재를 삭제합니다")
+    @DeleteMapping("/save/{resumeId}")
+    public ResponseEntity<Map<String, Object>> unsaveTalent(
+            @Parameter(description = "이력서 ID", required = true)
+            @PathVariable Long resumeId,
+            @Parameter(description = "기업 회원 ID", required = true)
+            @RequestHeader("userId") Long companyUserId
+    ) {
+        log.info("DELETE /api/resume/save/{} - companyUserId: {}", resumeId, companyUserId);
+
+        boolean unsaved = talentService.unsaveTalent(companyUserId, resumeId);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", unsaved);
+        response.put("message", unsaved ? "저장이 취소되었습니다" : "저장되지 않은 인재입니다");
+
+        return ResponseEntity.ok(response);
+    }
+
+    @Operation(summary = "인재 저장 여부 확인")
+    @GetMapping("/save/check/{resumeId}")
+    public ResponseEntity<Map<String, Boolean>> checkSaved(
+            @Parameter(description = "이력서 ID", required = true)
+            @PathVariable Long resumeId,
+            @Parameter(description = "기업 회원 ID", required = true)
+            @RequestHeader("userId") Long companyUserId
+    ) {
+        boolean isSaved = talentService.isSaved(companyUserId, resumeId);
+
+        Map<String, Boolean> response = new HashMap<>();
+        response.put("saved", isSaved);
+
+        return ResponseEntity.ok(response);
+    }
+
+    @Operation(summary = "인재 연락하기", description = "인재에게 연락 요청을 보냅니다")
+    @PostMapping("/contact")
+    public ResponseEntity<Map<String, Object>> contactTalent(
+            @Parameter(description = "연락 요청 데이터", required = true)
+            @RequestBody ContactTalentRequest request,
+            @Parameter(description = "기업 회원 ID", required = true)
+            @RequestHeader("userId") Long companyUserId
+    ) {
+        log.info("POST /api/resume/contact - companyUserId: {}, resumeId: {}", 
+                companyUserId, request.getResumeId());
+
+        TalentContact contact = talentService.contactTalent(
+                companyUserId, request.getResumeId(), request.getMessage());
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("message", "연락 요청이 전송되었습니다");
+        response.put("contactId", contact.getContactId());
 
         return ResponseEntity.ok(response);
     }

@@ -1,9 +1,16 @@
 package org.zerock.nextenter.ai.resume.dto;
 
 import lombok.*;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * [문제 해결 버전]
+ * 이력서 내용을 담을 필드(resumeText)가 추가되었습니다.
+ * 이제 빈 껍데기가 아니라 진짜 데이터를 운반합니다.
+ */
 @Getter
 @Setter
 @NoArgsConstructor
@@ -13,96 +20,59 @@ public class AiRecommendRequest {
 
     private Long resumeId;
     private Long userId;
+
+    // ⭐ [추가됨] 이 필드가 없어서 그동안 내용이 안 갔던 겁니다!
+    private String resumeText; 
     
-    // AI 서버로 전달할 이력서 데이터
-    private String jobCategory;      // 직무 카테고리 (backend, frontend 등)
-    private List<String> skills;     // 보유 스킬 리스트
-    private Integer experience;      // 경력 년수
+    // 이력서 기본 정보
+    private String jobCategory;      // "backend", "ui/ux", "pm" 등
+    private List<String> skills;     // ["Java", "Spring"]
+    private Integer experience;      // 경력 (년)
     private String education;        // 학력
-    private String preferredLocation; // 선호 지역
+    private String preferredLocation; 
     
-    // AI 서버 요청 형식으로 변환 (NextEnterAI ResumeInputDTO 형식에 맞춤)
+    // 파이썬 서버로 보낼 데이터를 Map으로 예쁘게 포장하는 메서드
     public Map<String, Object> toAiRequestMap() {
-        // ID 생성 (resumeId 기반)
-        String id = "RESUME_" + (resumeId != null ? resumeId : "UNKNOWN");
+        Map<String, Object> result = new HashMap<>();
         
-        // target_role 설정 (jobCategory를 직무명으로 변환)
-        String targetRole = convertJobCategoryToRole(jobCategory);
+        // 1. ID 정보 (문자열로 변환하여 안전하게 전송)
+        result.put("id", resumeId != null ? String.valueOf(resumeId) : "unknown");
+        result.put("user_id", userId != null ? String.valueOf(userId) : "unknown");
         
-        // education 리스트 생성
-        List<Map<String, String>> educationList = List.of(
-            Map.of(
-                "degree", education != null ? education : "미기재",
-                "major", "관련학과",
-                "status", "졸업"
-            )
-        );
+        // 2. 직무 타겟팅
+        String targetRole = convertJobCategoryToRole(this.jobCategory);
+        result.put("target_role", targetRole);
         
-        // skills 맵 생성
-        Map<String, List<String>> skillsMap = Map.of(
-            "essential", skills != null ? skills : List.of(),
-            "additional", List.of()
-        );
+        // 3. ⭐ [핵심] 이력서 내용물 채우기
+        // Python 서버가 'resume_content' 혹은 'resume_text' 중 뭘 좋아할지 몰라 둘 다 넣습니다. (안전빵)
+        Map<String, Object> contentMap = new HashMap<>();
+        contentMap.put("raw_text", this.resumeText != null ? this.resumeText : "");
+        contentMap.put("skills", this.skills != null ? this.skills : new ArrayList<>());
+        contentMap.put("experience_years", this.experience != null ? this.experience : 0);
+        contentMap.put("education", this.education != null ? this.education : "");
         
-        // professional_experience 리스트 생성
-        List<Map<String, Object>> experienceList = List.of(
-            Map.of(
-                "company", "이전회사",
-                "period", (experience != null ? experience * 12 : 0) + "개월",
-                "role", targetRole,
-                "key_tasks", List.of("업무 수행")
-            )
-        );
+        // Python 구조에 맞춰서 데이터 삽입
+        result.put("resume_content", contentMap);
+        result.put("resume_text", this.resumeText != null ? this.resumeText : ""); // 혹시 몰라 최상위에도 넣음
         
-        // resume_content 구조 생성
-        Map<String, Object> resumeContent = Map.of(
-            "education", educationList,
-            "skills", skillsMap,
-            "professional_experience", experienceList,
-            "project_experience", List.of()
-        );
-        
-        // 최종 요청 맵 생성
-        return Map.of(
-            "id", id,
-            "target_role", targetRole,
-            "resume_content", resumeContent
-        );
+        return result;
     }
     
-    // 직무 카테고리를 구체적인 직무명으로 변환
+    // 직무명 표준화 로직
     private String convertJobCategoryToRole(String category) {
-        if (category == null) return "Developer";
+        if (category == null) return "Backend Developer";
         
-        String lowerCategory = category.toLowerCase();
+        String lower = category.toLowerCase().trim();
         
-        // 한글 직무명 처리
-        if (lowerCategory.contains("백엔드") || lowerCategory.equals("backend")) {
-            return "Backend Developer";
-        } else if (lowerCategory.contains("프론트엔드") || lowerCategory.equals("frontend")) {
-            return "Frontend Developer";
-        } else if (lowerCategory.contains("풀스택") || lowerCategory.equals("fullstack")) {
-            return "Fullstack Developer";
-        } else if (lowerCategory.contains("ai") || lowerCategory.contains("인공지능")) {
-            return "AI Engineer";
-        } else if (lowerCategory.contains("데이터") || lowerCategory.equals("data")) {
-            return "Data Scientist";
-        } else if (lowerCategory.contains("모바일") || lowerCategory.equals("mobile")) {
-            return "Mobile Developer";
-        } else if (lowerCategory.contains("데브옵스") || lowerCategory.equals("devops")) {
-            return "DevOps Engineer";
+        if (lower.contains("ui") || lower.contains("ux") || lower.contains("design") || lower.contains("디자인")) {
+            return "UI/UX Designer";
         }
-        
-        // 영문 처리 (fallback)
-        switch (lowerCategory) {
-            case "backend": return "Backend Developer";
-            case "frontend": return "Frontend Developer";
-            case "fullstack": return "Fullstack Developer";
-            case "ai": return "AI Engineer";
-            case "data": return "Data Scientist";
-            case "mobile": return "Mobile Developer";
-            case "devops": return "DevOps Engineer";
-            default: return category + " Developer";
+        if (lower.contains("pm") || lower.contains("기획") || lower.contains("manager")) {
+            return "Product Manager";
         }
+        if (lower.contains("front") || lower.contains("프론트")) return "Frontend Developer";
+        if (lower.contains("full") || lower.contains("풀스택")) return "Fullstack Developer";
+        
+        return "Backend Developer"; // 기본값
     }
 }

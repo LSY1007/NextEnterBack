@@ -1,5 +1,9 @@
 package org.zerock.nextenter.config;
 
+import org.zerock.nextenter.security.filter.JWTCheckFilter;
+import org.zerock.nextenter.security.handler.OAuth2SuccessHandler;
+import org.zerock.nextenter.security.service.CustomOAuth2UserService;
+import org.zerock.nextenter.util.JWTUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j; // 로그 확인용
 import org.springframework.context.annotation.Bean;
@@ -16,10 +20,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-import org.zerock.nextenter.security.filter.JWTCheckFilter;
-import org.zerock.nextenter.security.handler.OAuth2SuccessHandler;
-import org.zerock.nextenter.security.service.CustomOAuth2UserService;
-import org.zerock.nextenter.util.JWTUtil;
+
 
 import java.util.Arrays;
 
@@ -60,12 +61,26 @@ public class SecurityConfig {
                         .requestMatchers("/api/company/login", "/api/company/register").permitAll()
                         .requestMatchers("/api/company/**").authenticated() // 기업 프로필 수정은 인증 필요
                         .requestMatchers("/api/auth/**").permitAll()
-                        // ... 나머지 허용 경로들 ...
-                        .anyRequest().permitAll() // 테스트를 위해 나머지는 일단 다 틉니다.
+                        .requestMatchers("/api/resume/**").permitAll()
+                        .requestMatchers("/api/jobs/**").permitAll()
+                        .requestMatchers("/api/company/**").permitAll()
+                        .requestMatchers("/api/matching/**").permitAll()
+                        .requestMatchers("/api/interview/**").permitAll()
+                        .requestMatchers("/api/credit/**").permitAll()
+                        .requestMatchers("/api/recommendations/**").permitAll()
+                        .requestMatchers("/api/bookmarks/**").permitAll()
+                        .requestMatchers("/uploads/**").permitAll()
+                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-resources/**").permitAll()
+                        .requestMatchers("/login/oauth2/code/**").permitAll()  // OAuth2 콜백
+                        .requestMatchers("/api/ai/**").permitAll()
+                        .anyRequest().authenticated()
                 )
+                // OAuth2 로그인 설정 추가
                 .oauth2Login(oauth2 -> oauth2
-                        .userInfoEndpoint(userInfo -> userInfo.userService(customOAuth2UserService))
-                        .successHandler(oAuth2SuccessHandler)
+                    .userInfoEndpoint(userInfo -> userInfo
+                            .userService(customOAuth2UserService)
+                    )
+                    .successHandler(oAuth2SuccessHandler)
                 );
 
         return http.build();
@@ -74,11 +89,21 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        // 프론트엔드 주소 확실하게 지정
-        configuration.setAllowedOriginPatterns(Arrays.asList("http://localhost:5173", "http://127.0.0.1:5173"));
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
+
+        configuration.setAllowedOriginPatterns(Arrays.asList(
+                "http://localhost:5173",
+                "http://127.0.0.1:5173"
+        ));
+
+        configuration.setAllowedMethods(Arrays.asList(
+                "GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"
+        ));
+
         configuration.setAllowedHeaders(Arrays.asList("*"));
         configuration.setAllowCredentials(true);
+        configuration.setExposedHeaders(Arrays.asList("Authorization", "Content-Type"));
+        configuration.setMaxAge(3600L);
+
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;

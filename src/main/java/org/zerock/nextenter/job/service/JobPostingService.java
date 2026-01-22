@@ -99,6 +99,8 @@ public class JobPostingService {
                 .salaryMax(request.getSalaryMax())
                 .location(request.getLocation())
                 .description(request.getDescription())
+                .thumbnailUrl(request.getThumbnailUrl())
+                .detailImageUrl(request.getDetailImageUrl())
                 .deadline(request.getDeadline())
                 .status(request.getStatus() != null && !request.getStatus().isEmpty() ?
                         JobPosting.Status.valueOf(request.getStatus().toUpperCase()) : JobPosting.Status.ACTIVE)
@@ -153,6 +155,12 @@ public class JobPostingService {
         }
         if (request.getDescription() != null) {
             jobPosting.setDescription(request.getDescription());
+        }
+        if (request.getThumbnailUrl() != null) {
+            jobPosting.setThumbnailUrl(request.getThumbnailUrl());
+        }
+        if (request.getDetailImageUrl() != null) {
+            jobPosting.setDetailImageUrl(request.getDetailImageUrl());
         }
         if (request.getDeadline() != null) {
             jobPosting.setDeadline(request.getDeadline());
@@ -243,6 +251,7 @@ public class JobPostingService {
                 .title(jobPosting.getTitle())
                 .companyName(companyName)
                 .logoUrl(logoUrl)
+                .thumbnailUrl(jobPosting.getThumbnailUrl())
                 .jobCategory(jobPosting.getJobCategory())
                 .location(jobPosting.getLocation())
                 .experienceMin(jobPosting.getExperienceMin())
@@ -295,6 +304,8 @@ public class JobPostingService {
                 .salaryMax(jobPosting.getSalaryMax())
                 .location(jobPosting.getLocation())
                 .description(jobPosting.getDescription())
+                .thumbnailUrl(jobPosting.getThumbnailUrl())
+                .detailImageUrl(jobPosting.getDetailImageUrl())
                 .deadline(jobPosting.getDeadline())
                 .status(jobPosting.getStatus().name())
                 .viewCount(jobPosting.getViewCount())

@@ -37,6 +37,11 @@ public class JobPostingResponse {
 
     private String location;
     private String description;
+    
+    // 이미지 URL
+    private String thumbnailUrl;
+    private String detailImageUrl;
+    
     private LocalDate deadline;
 
     // 상태 및 통계

@@ -33,6 +33,10 @@ public class JobPostingRequest {
     private String location;
     private String description;
 
+    // 이미지 URL
+    private String thumbnailUrl;
+    private String detailImageUrl;
+
     private LocalDate deadline;
 
     private String status;

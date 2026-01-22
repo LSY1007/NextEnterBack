@@ -191,11 +191,30 @@ public class ApplyService {
         Resume resume = apply.getResumeId() != null ?
                 resumeRepository.findById(apply.getResumeId()).orElse(null) : null;
 
-        // 기술 스택 파싱
-        List<String> skills = resume != null && resume.getSkills() != null ?
-                Arrays.stream(resume.getSkills().split(","))
+        // 기술 스택 파싱 (JSON 배열 또는 쉼표 구분 문자열)
+        List<String> skills = List.of();
+        if (resume != null && resume.getSkills() != null && !resume.getSkills().isEmpty()) {
+            try {
+                // JSON 배열로 파싱 시도
+                if (resume.getSkills().trim().startsWith("[")) {
+                    com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                    skills = mapper.readValue(resume.getSkills(), 
+                            mapper.getTypeFactory().constructCollectionType(List.class, String.class));
+                } else {
+                    // 쉼표 구분 문자열로 파싱
+                    skills = Arrays.stream(resume.getSkills().split(","))
+                            .map(String::trim)
+                            .filter(s -> !s.isEmpty())
+                            .collect(Collectors.toList());
+                }
+            } catch (Exception e) {
+                log.warn("skills 파싱 실패, 쉼표 구분으로 재시도: {}", e.getMessage());
+                skills = Arrays.stream(resume.getSkills().split(","))
                         .map(String::trim)
-                        .collect(Collectors.toList()) : List.of();
+                        .filter(s -> !s.isEmpty())
+                        .collect(Collectors.toList());
+            }
+        }
 
         // 경력 계산 (임시 - 추후 Resume에서 파싱)
         String experience = "5년"; // TODO: structuredData에서 파싱
@@ -219,6 +238,110 @@ public class ApplyService {
     private ApplyResponse convertToDetailResponse(Apply apply) {
         User user = userRepository.findById(apply.getUserId()).orElse(null);
         JobPosting job = jobPostingRepository.findById(apply.getJobId()).orElse(null);
+        
+        // 이력서 정보 가져오기
+        Resume resume = apply.getResumeId() != null ?
+                resumeRepository.findById(apply.getResumeId()).orElse(null) : null;
+        
+        // 기술 스택 파싱 (JSON 배열 또는 쉼표 구분 문자열)
+        List<String> skills = List.of();
+        if (resume != null && resume.getSkills() != null && !resume.getSkills().isEmpty()) {
+            try {
+                // JSON 배열로 파싱 시도
+                if (resume.getSkills().trim().startsWith("[")) {
+                    com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                    skills = mapper.readValue(resume.getSkills(), 
+                            mapper.getTypeFactory().constructCollectionType(List.class, String.class));
+                } else {
+                    // 쉼표 구분 문자열로 파싱
+                    skills = Arrays.stream(resume.getSkills().split(","))
+                            .map(String::trim)
+                            .filter(s -> !s.isEmpty())
+                            .collect(Collectors.toList());
+                }
+            } catch (Exception e) {
+                log.warn("skills 파싱 실패, 쉼표 구분으로 재시도: {}", e.getMessage());
+                skills = Arrays.stream(resume.getSkills().split(","))
+                        .map(String::trim)
+                        .filter(s -> !s.isEmpty())
+                        .collect(Collectors.toList());
+            }
+        }
+
+        // structuredData에서 상세 정보 추출
+        String education = null;
+        String certifications = null;
+        String coverLetterContent = null;
+        String experience = "5년"; // 기본값
+        
+        if (resume != null && resume.getStructuredData() != null) {
+            try {
+                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                com.fasterxml.jackson.databind.JsonNode root = mapper.readTree(resume.getStructuredData());
+                
+                // 학력 정보 추출
+                if (root.has("educations")) {
+                    com.fasterxml.jackson.databind.JsonNode educations = root.get("educations");
+                    StringBuilder eduBuilder = new StringBuilder();
+                    for (com.fasterxml.jackson.databind.JsonNode edu : educations) {
+                        if (edu.has("school") && edu.has("period")) {
+                            eduBuilder.append(edu.get("school").asText())
+                                    .append(" | ")
+                                    .append(edu.get("period").asText())
+                                    .append("\n");
+                        }
+                    }
+                    if (eduBuilder.length() > 0) {
+                        education = eduBuilder.toString().trim();
+                    }
+                }
+                
+                // 자격증 정보 추출
+                if (root.has("certificates")) {
+                    com.fasterxml.jackson.databind.JsonNode certificates = root.get("certificates");
+                    StringBuilder certBuilder = new StringBuilder();
+                    for (com.fasterxml.jackson.databind.JsonNode cert : certificates) {
+                        if (cert.has("title") && cert.has("date")) {
+                            certBuilder.append(cert.get("title").asText())
+                                    .append(" | ")
+                                    .append(cert.get("date").asText())
+                                    .append("\n");
+                        }
+                    }
+                    if (certBuilder.length() > 0) {
+                        certifications = certBuilder.toString().trim();
+                    }
+                }
+                
+                // 경력 정보 추출
+                if (root.has("careers")) {
+                    com.fasterxml.jackson.databind.JsonNode careers = root.get("careers");
+                    if (careers.isArray() && careers.size() > 0) {
+                        int totalMonths = 0;
+                        for (com.fasterxml.jackson.databind.JsonNode career : careers) {
+                            if (career.has("period")) {
+                                String period = career.get("period").asText();
+                                totalMonths += parsePeriodToMonths(period);
+                            }
+                        }
+                        int years = totalMonths / 12;
+                        experience = years > 0 ? years + "년" : "신입";
+                    }
+                } else {
+                    experience = "신입"; // 경력 없으면 신입
+                }
+                
+                // 자기소개서 정보 추출
+                if (root.has("coverLetter")) {
+                    com.fasterxml.jackson.databind.JsonNode coverLetter = root.get("coverLetter");
+                    if (coverLetter.has("content")) {
+                        coverLetterContent = coverLetter.get("content").asText();
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("이력서 structuredData 파싱 실패: {}", e.getMessage());
+            }
+        }
 
         return ApplyResponse.builder()
                 .applyId(apply.getApplyId())
@@ -232,6 +355,14 @@ public class ApplyService {
                 .userPhone(user != null ? user.getPhone() : null)
                 .jobTitle(job != null ? job.getTitle() : "알 수 없음")
                 .jobCategory(job != null ? job.getJobCategory() : "알 수 없음")
+                // 이력서 정보
+                .resumeTitle(resume != null ? resume.getTitle() : null)
+                .skills(skills)
+                .experience(experience)
+                .education(education)
+                .certifications(certifications)
+                // 자기소개서 정보
+                .coverLetterContent(coverLetterContent)
                 .status(apply.getStatus().name())
                 .aiScore(apply.getAiScore())
                 .notes(apply.getNotes())
@@ -239,5 +370,33 @@ public class ApplyService {
                 .reviewedAt(apply.getReviewedAt())
                 .updatedAt(apply.getUpdatedAt())
                 .build();
+    }
+    
+    // 기간 문자열을 개월수로 변환
+    private int parsePeriodToMonths(String period) {
+        try {
+            // "2019.2 ~ 2023.5" 형식 파싱
+            String[] parts = period.split("~");
+            if (parts.length != 2) return 0;
+            
+            String start = parts[0].trim().replace(" ", "");
+            String end = parts[1].trim().replace(" ", "");
+            
+            // "2019.2" -> [2019, 2]
+            String[] startParts = start.split("\\.");
+            String[] endParts = end.split("\\.");
+            
+            if (startParts.length >= 2 && endParts.length >= 2) {
+                int startYear = Integer.parseInt(startParts[0]);
+                int startMonth = Integer.parseInt(startParts[1]);
+                int endYear = Integer.parseInt(endParts[0]);
+                int endMonth = Integer.parseInt(endParts[1]);
+                
+                return (endYear - startYear) * 12 + (endMonth - startMonth);
+            }
+        } catch (Exception e) {
+            log.warn("기간 파싱 실패: {}", period);
+        }
+        return 0;
     }
 }

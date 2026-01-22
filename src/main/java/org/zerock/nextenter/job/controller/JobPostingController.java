@@ -148,4 +148,17 @@ public class JobPostingController {
 
         return ResponseEntity.ok(response);
     }
+
+    @Operation(summary = "기업의 모든 공고 조회 (상태 무관)")
+    @GetMapping("/company/{companyId}")
+    public ResponseEntity<java.util.List<JobPostingListResponse>> getCompanyJobPostings(
+            @Parameter(description = "기업 ID", required = true, example = "1")
+            @PathVariable Long companyId
+    ) {
+        log.info("GET /api/jobs/company/{}", companyId);
+
+        java.util.List<JobPostingListResponse> jobs = jobPostingService.getCompanyJobPostings(companyId);
+
+        return ResponseEntity.ok(jobs);
+    }
 }

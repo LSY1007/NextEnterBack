@@ -28,6 +28,16 @@ public class ApplyResponse {
     private String jobTitle;
     private String jobCategory;
 
+    // 이력서 정보
+    private String resumeTitle;
+    private java.util.List<String> skills;
+    private String experience;
+    private String education;
+    private String certifications;
+
+    // 자기소개서 정보
+    private String coverLetterContent;
+
     // 지원 정보
     private String status;
     private Integer aiScore;

@@ -44,7 +44,7 @@ public class Company {
     @Column(name = "employee_count")
     private Integer employeeCount;
 
-    @Column(name = "logo_url", length = 255)
+    @Column(name = "logo_url", columnDefinition = "LONGTEXT")
     private String logoUrl;
 
     @Column(length = 255)

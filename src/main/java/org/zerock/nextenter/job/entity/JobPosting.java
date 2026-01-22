@@ -53,6 +53,13 @@ public class JobPosting {
     @Column(columnDefinition = "TEXT")
     private String description;
 
+    // 이미지 URL
+    @Column(name = "thumbnail_url", columnDefinition = "LONGTEXT")
+    private String thumbnailUrl;
+
+    @Column(name = "detail_image_url", columnDefinition = "LONGTEXT")
+    private String detailImageUrl;
+
     private LocalDate deadline;
 
     @Builder.Default

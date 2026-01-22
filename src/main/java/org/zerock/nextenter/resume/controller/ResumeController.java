@@ -51,13 +51,16 @@ public class ResumeController {
             @RequestParam(defaultValue = "0") int page,
 
             @Parameter(description = "페이지 크기", example = "10")
-            @RequestParam(defaultValue = "10") int size
+            @RequestParam(defaultValue = "10") int size,
+
+            @Parameter(description = "기업 회원 ID")
+            @RequestHeader(value = "userId", required = false) Long companyUserId
     ) {
-        log.info("GET /api/resume/search - jobCategory: {}, keyword: {}, page: {}", 
-                jobCategory, keyword, page);
+        log.info("GET /api/resume/search - jobCategory: {}, keyword: {}, page: {}, companyUserId: {}", 
+                jobCategory, keyword, page, companyUserId);
 
         Page<TalentSearchResponse> talents = resumeService.searchTalents(
-                jobCategory, keyword, page, size);
+                jobCategory, keyword, page, size, companyUserId);
 
         return ResponseEntity.ok(talents);
     }
@@ -172,6 +175,19 @@ public class ResumeController {
         return ResponseEntity.ok(response);
     }
 
+    @Operation(summary = "스크랩한 인재 목록 조회", description = "기업 회원이 저장한 인재 목록을 조회합니다")
+    @GetMapping("/saved")
+    public ResponseEntity<Page<TalentSearchResponse>> getSavedTalents(
+            @Parameter(description = "기업 회원 ID", required = true)
+            @RequestHeader("userId") Long companyUserId
+    ) {
+        log.info("GET /api/resume/saved - companyUserId: {}", companyUserId);
+
+        Page<TalentSearchResponse> savedTalents = talentService.getSavedTalents(companyUserId);
+
+        return ResponseEntity.ok(savedTalents);
+    }
+
     @Operation(summary = "인재 저장 (북마크)", description = "인재를 저장합니다")
     @PostMapping("/save/{resumeId}")
     public ResponseEntity<Map<String, Object>> saveTalent(
@@ -244,6 +260,66 @@ public class ResumeController {
         response.put("success", true);
         response.put("message", "연락 요청이 전송되었습니다");
         response.put("contactId", contact.getContactId());
+
+        return ResponseEntity.ok(response);
+    }
+
+    @Operation(summary = "인재가 받은 연락 메시지 조회", description = "개인 회원이 기업으로부터 받은 연락 메시지를 조회합니다")
+    @GetMapping("/contact/received")
+    public ResponseEntity<List<TalentContact>> getReceivedContacts(
+            @Parameter(description = "인재(개인) 회원 ID", required = true)
+            @RequestHeader("userId") Long talentUserId
+    ) {
+        log.info("GET /api/resume/contact/received - talentUserId: {}", talentUserId);
+
+        List<TalentContact> contacts = talentService.getReceivedContacts(talentUserId);
+
+        return ResponseEntity.ok(contacts);
+    }
+
+    @Operation(summary = "연락 메시지 상태 변경", description = "연락 메시지의 상태를 변경합니다 (PENDING, ACCEPTED, REJECTED)")
+    @PutMapping("/contact/{contactId}/status")
+    public ResponseEntity<Map<String, Object>> updateContactStatus(
+            @Parameter(description = "연락 ID", required = true)
+            @PathVariable Long contactId,
+            @Parameter(description = "변경할 상태", required = true)
+            @RequestParam String status,
+            @Parameter(description = "인재(개인) 회원 ID", required = true)
+            @RequestHeader("userId") Long talentUserId
+    ) {
+        log.info("PUT /api/resume/contact/{}/status - status: {}, talentUserId: {}", 
+                contactId, status, talentUserId);
+
+        boolean updated = talentService.updateContactStatus(contactId, status, talentUserId);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", updated);
+        response.put("message", updated ? "상태가 변경되었습니다" : "권한이 없거나 존재하지 않는 연락입니다");
+
+        return ResponseEntity.ok(response);
+    }
+
+    @Operation(summary = "특정 이력서에 대한 연락 상태 확인", description = "기업이 특정 인재에게 보낸 연락의 최신 상태를 확인합니다")
+    @GetMapping("/contact/status/{resumeId}")
+    public ResponseEntity<Map<String, Object>> getContactStatus(
+            @Parameter(description = "이력서 ID", required = true)
+            @PathVariable Long resumeId,
+            @Parameter(description = "기업 회원 ID", required = true)
+            @RequestHeader("userId") Long companyUserId
+    ) {
+        log.info("GET /api/resume/contact/status/{} - companyUserId: {}", resumeId, companyUserId);
+
+        TalentContact contact = talentService.getLatestContact(companyUserId, resumeId);
+
+        Map<String, Object> response = new HashMap<>();
+        if (contact != null) {
+            response.put("hasContact", true);
+            response.put("status", contact.getStatus());
+            response.put("contactId", contact.getContactId());
+        } else {
+            response.put("hasContact", false);
+            response.put("status", null);
+        }
 
         return ResponseEntity.ok(response);
     }

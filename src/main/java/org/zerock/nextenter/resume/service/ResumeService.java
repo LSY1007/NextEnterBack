@@ -15,7 +15,9 @@ import org.zerock.nextenter.resume.dto.ResumeRequest;
 import org.zerock.nextenter.resume.dto.ResumeResponse;
 import org.zerock.nextenter.resume.dto.TalentSearchResponse;
 import org.zerock.nextenter.resume.entity.Resume;
+import org.zerock.nextenter.resume.entity.TalentContact;
 import org.zerock.nextenter.resume.repository.ResumeRepository;
+import org.zerock.nextenter.resume.repository.TalentContactRepository;
 import org.zerock.nextenter.user.entity.User;
 import org.zerock.nextenter.user.repository.UserRepository;
 
@@ -35,6 +37,7 @@ public class ResumeService {
     private final ResumeRepository resumeRepository;
     private final FileStorageService fileStorageService;
     private final UserRepository userRepository;
+    private final TalentContactRepository talentContactRepository;
     private final ObjectMapper objectMapper = new ObjectMapper(); // JSON 파싱용
 
     // 이력서 목록 조회
@@ -231,9 +234,10 @@ public class ResumeService {
      * 인재 검색
      */
     public Page<TalentSearchResponse> searchTalents(
-            String jobCategory, String keyword, int page, int size) {
+            String jobCategory, String keyword, int page, int size, Long companyUserId) {
         
-        log.info("인재 검색 - jobCategory: {}, keyword: {}, page: {}", jobCategory, keyword, page);
+        log.info("인재 검색 - jobCategory: {}, keyword: {}, page: {}, companyUserId: {}", 
+                jobCategory, keyword, page, companyUserId);
 
         Pageable pageable = PageRequest.of(page, size);
         Page<Resume> resumePage = resumeRepository.searchTalents(jobCategory, keyword, pageable);
@@ -273,6 +277,21 @@ public class ResumeService {
             // 매칭 점수 계산 (임시로 80-95 사이 랜덤)
             int matchScore = 80 + (int)(Math.random() * 16);
 
+            // ✅ 연락 상태 확인
+            String contactStatus = null;
+            if (companyUserId != null) {
+                List<TalentContact> contacts = talentContactRepository
+                        .findByResumeIdOrderByCreatedAtDesc(resume.getResumeId());
+                
+                // 해당 기업이 보낸 연락 중 가장 최근 것의 상태
+                for (TalentContact contact : contacts) {
+                    if (contact.getCompanyUserId().equals(companyUserId)) {
+                        contactStatus = contact.getStatus();
+                        break;
+                    }
+                }
+            }
+
             return TalentSearchResponse.builder()
                     .resumeId(resume.getResumeId())
                     .userId(resume.getUserId())
@@ -283,8 +302,9 @@ public class ResumeService {
                     .experienceYears(experienceYears)
                     .salaryRange(salaryRange)
                     .matchScore(matchScore)
-                    .isAvailable(true) // TODO: User 엔티티에 isAvailable 필드 추가 필요
+                    .isAvailable(true)
                     .viewCount(resume.getViewCount())
+                    .contactStatus(contactStatus) // ✅ 연락 상태 추가
                     .build();
         });
     }

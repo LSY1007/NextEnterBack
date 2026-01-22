@@ -23,4 +23,5 @@ public class TalentSearchResponse {
     private Integer matchScore; // 매칭 점수 (추후 AI로 계산)
     private Boolean isAvailable; // 연락 가능 여부
     private Integer viewCount;
+    private String contactStatus; // 연락 상태 (PENDING, ACCEPTED, REJECTED, null)
 }

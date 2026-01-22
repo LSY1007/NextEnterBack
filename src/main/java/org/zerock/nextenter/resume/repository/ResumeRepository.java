@@ -42,8 +42,10 @@ public interface ResumeRepository extends JpaRepository<Resume, Long> {
 
     // 인재 검색 - 공개된 이력서 중 검색 (페이징)
     @Query("SELECT r FROM Resume r WHERE r.visibility = 'PUBLIC' AND r.deletedAt IS NULL " +
-            "AND (:jobCategory IS NULL OR r.jobCategory = :jobCategory) " +
-            "AND (:keyword IS NULL OR r.skills LIKE %:keyword% OR r.jobCategory LIKE %:keyword%) " +
+            "AND (:jobCategory IS NULL OR :jobCategory = '' OR r.jobCategory = :jobCategory) " +
+            "AND (:keyword IS NULL OR :keyword = '' OR " +
+            "LOWER(r.skills) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
+            "LOWER(r.jobCategory) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
             "ORDER BY r.createdAt DESC")
     Page<Resume> searchTalents(
             @Param("jobCategory") String jobCategory,

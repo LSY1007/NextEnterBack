@@ -35,6 +35,7 @@ public class ApplyService {
     private final UserRepository userRepository;
     private final JobPostingRepository jobPostingRepository;
     private final ResumeRepository resumeRepository;
+    private final org.zerock.nextenter.notification.NotificationService notificationService;
 
     /**
      * 지원하기 (개인회원용)
@@ -85,6 +86,19 @@ public class ApplyService {
         // 실제 지원자 수 확인
         Long actualCount = applyRepository.countByJobId(request.getJobId());
         log.info("실제 지원자 수 - jobId: {}, count: {}", request.getJobId(), actualCount);
+        
+        // 기업에 새로운 지원자 알림 전송
+        try {
+            notificationService.notifyNewApplication(
+                job.getCompanyId(),
+                job.getTitle(),
+                apply.getApplyId()
+            );
+            log.info("새 지원자 알림 전송 완료 - companyId: {}, jobTitle: {}", 
+                job.getCompanyId(), job.getTitle());
+        } catch (Exception e) {
+            log.error("새 지원자 알림 전송 실패", e);
+        }
         
         log.info("지원 완료 - applyId: {}", apply.getApplyId());
 
@@ -174,16 +188,46 @@ public class ApplyService {
                         "지원 내역을 찾을 수 없거나 접근 권한이 없습니다"));
 
         // 상태 변경
-        apply.setStatus(Apply.Status.valueOf(request.getStatus()));
+        Apply.Status newStatus = Apply.Status.valueOf(request.getStatus());
+        apply.setStatus(newStatus);
         apply.setNotes(request.getNotes());
         apply.setReviewedAt(LocalDateTime.now());
 
         applyRepository.save(apply);
+        
+        // 지원자에게 상태 변경 알림 전송
+        try {
+            JobPosting job = jobPostingRepository.findById(apply.getJobId()).orElse(null);
+            if (job != null) {
+                String statusText = getStatusText(newStatus);
+                notificationService.notifyApplicationStatus(
+                    apply.getUserId(),
+                    job.getTitle(),
+                    statusText,
+                    apply.getApplyId()
+                );
+                log.info("지원 상태 변경 알림 전송 완료 - userId: {}, status: {}", 
+                    apply.getUserId(), statusText);
+            }
+        } catch (Exception e) {
+            log.error("지원 상태 변경 알림 전송 실패", e);
+        }
 
         return convertToDetailResponse(apply);
     }
 
     // Private helper methods
+    
+    private String getStatusText(Apply.Status status) {
+        switch (status) {
+            case PENDING: return "검토 중";
+            case REVIEWING: return "서류 검토중";
+            case ACCEPTED: return "합격";
+            case REJECTED: return "불합격";
+            case CANCELED: return "지원 취소";
+            default: return status.name();
+        }
+    }
 
     private ApplyListResponse convertToListResponse(Apply apply) {
         User user = userRepository.findById(apply.getUserId()).orElse(null);

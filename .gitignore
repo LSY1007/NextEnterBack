@@ -1,4 +1,4 @@
-﻿# OS & IDE
+# OS & IDE
 .DS_Store
 Thumbs.db
 .idea/
@@ -17,3 +17,6 @@ bin/
 src/main/resources/application-local.properties
 # Local-only Lombok warning suppression
 lombok.config
+
+# Security Config (로컬 전용)
+src/main/java/org/zerock/nextenter/config/SecurityConfig.java

@@ -92,4 +92,29 @@ public class NotificationController {
         response.put("message", "알림이 삭제되었습니다.");
         return ResponseEntity.ok(response);
     }
+    
+    /**
+     * 테스트용 알림 전송
+     */
+    @PostMapping("/test/{userType}/{userId}")
+    public ResponseEntity<Map<String, String>> sendTestNotification(
+            @PathVariable String userType,
+            @PathVariable Long userId
+    ) {
+        log.info("테스트 알림 전송 요청: userType={}, userId={}", userType, userId);
+        
+        notificationService.createAndSendNotification(
+            userId,
+            userType.toUpperCase(),
+            Notification.NotificationType.INTERVIEW_OFFER,
+            "테스트 알림",
+            "이것은 테스트 알림입니다. 웹소켓이 정상적으로 작동하는지 확인하세요.",
+            null,
+            null
+        );
+        
+        Map<String, String> response = new HashMap<>();
+        response.put("message", "테스트 알림이 전송되었습니다.");
+        return ResponseEntity.ok(response);
+    }
 }

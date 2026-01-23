@@ -89,13 +89,16 @@ public class ApplyService {
         
         // 기업에 새로운 지원자 알림 전송
         try {
+            log.info("알림 전송 시도 - companyId: {}, jobTitle: {}", 
+                job.getCompanyId(), job.getTitle());
+            
             notificationService.notifyNewApplication(
                 job.getCompanyId(),
                 job.getTitle(),
                 apply.getApplyId()
             );
-            log.info("새 지원자 알림 전송 완료 - companyId: {}, jobTitle: {}", 
-                job.getCompanyId(), job.getTitle());
+            
+            log.info("새 지원자 알림 전송 성공!");
         } catch (Exception e) {
             log.error("새 지원자 알림 전송 실패", e);
         }
@@ -199,15 +202,24 @@ public class ApplyService {
         try {
             JobPosting job = jobPostingRepository.findById(apply.getJobId()).orElse(null);
             if (job != null) {
+                // 회사명 가져오기
+                User companyUser = userRepository.findById(job.getCompanyId()).orElse(null);
+                String companyName = companyUser != null && companyUser.getName() != null
+                    ? companyUser.getName() : job.getTitle();
+                
                 String statusText = getStatusText(newStatus);
+                
+                log.info("알림 전송 시도 - userId: {}, companyName: {}, status: {}",
+                    apply.getUserId(), companyName, statusText);
+                
                 notificationService.notifyApplicationStatus(
                     apply.getUserId(),
-                    job.getTitle(),
+                    companyName,
                     statusText,
                     apply.getApplyId()
                 );
-                log.info("지원 상태 변경 알림 전송 완료 - userId: {}, status: {}", 
-                    apply.getUserId(), statusText);
+                
+                log.info("지원 상태 변경 알림 전송 성공!");
             }
         } catch (Exception e) {
             log.error("지원 상태 변경 알림 전송 실패", e);
@@ -415,6 +427,7 @@ public class ApplyService {
                 .updatedAt(apply.getUpdatedAt())
                 .build();
     }
+<<<<<<< Updated upstream
     
     // 기간 문자열을 개월수로 변환
     private int parsePeriodToMonths(String period) {
@@ -444,3 +457,6 @@ public class ApplyService {
         return 0;
     }
 }
+=======
+}
+>>>>>>> Stashed changes

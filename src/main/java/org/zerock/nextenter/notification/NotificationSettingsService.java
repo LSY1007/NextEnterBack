@@ -70,7 +70,15 @@ public class NotificationSettingsService {
      */
     @Transactional(readOnly = true)
     public boolean isNotificationEnabled(Long userId, String userType, String notificationType) {
-        NotificationSettings settings = getOrCreateSettings(userId, userType);
+        // 설정이 없으면 기본값 true 반환 (새로 생성하지 않음)
+        NotificationSettings settings = settingsRepository.findByUserIdAndUserType(userId, userType)
+                .orElse(null);
+        
+        // 설정이 없으면 모든 알림 활성화 (기본값)
+        if (settings == null) {
+            log.info("알림 설정이 없어 기본값(true) 사용 - userId: {}, userType: {}", userId, userType);
+            return true;
+        }
         
         return switch (notificationType) {
             case "NEW_APPLICATION" -> settings.getNewApplicationNotification();

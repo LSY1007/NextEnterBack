@@ -22,6 +22,7 @@ public class JobPostingListResponse {
     private String thumbnailUrl;
     private String jobCategory;
     private String location;
+    private String locationCity; // 시/도 정보 (필터링용)
     private Integer experienceMin;
     private Integer experienceMax;
     private Integer salaryMin;

@@ -36,6 +36,7 @@ public class JobPostingResponse {
     private Integer salaryMax;
 
     private String location;
+    private String locationCity; // 시/도 정보 (필터링용)
     private String description;
     
     // 이미지 URL

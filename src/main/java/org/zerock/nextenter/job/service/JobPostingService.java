@@ -98,6 +98,7 @@ public class JobPostingService {
                 .salaryMin(request.getSalaryMin())
                 .salaryMax(request.getSalaryMax())
                 .location(request.getLocation())
+                .locationCity(request.getLocationCity()) // 시/도 정보 추가
                 .description(request.getDescription())
                 .thumbnailUrl(request.getThumbnailUrl())
                 .detailImageUrl(request.getDetailImageUrl())
@@ -152,6 +153,9 @@ public class JobPostingService {
         }
         if (request.getLocation() != null) {
             jobPosting.setLocation(request.getLocation());
+        }
+        if (request.getLocationCity() != null) {
+            jobPosting.setLocationCity(request.getLocationCity());
         }
         if (request.getDescription() != null) {
             jobPosting.setDescription(request.getDescription());
@@ -254,6 +258,7 @@ public class JobPostingService {
                 .thumbnailUrl(jobPosting.getThumbnailUrl())
                 .jobCategory(jobPosting.getJobCategory())
                 .location(jobPosting.getLocation())
+                .locationCity(jobPosting.getLocationCity()) // 시/도 정보 추가
                 .experienceMin(jobPosting.getExperienceMin())
                 .experienceMax(jobPosting.getExperienceMax())
                 .salaryMin(jobPosting.getSalaryMin())
@@ -303,6 +308,7 @@ public class JobPostingService {
                 .salaryMin(jobPosting.getSalaryMin())
                 .salaryMax(jobPosting.getSalaryMax())
                 .location(jobPosting.getLocation())
+                .locationCity(jobPosting.getLocationCity()) // 시/도 정보 추가
                 .description(jobPosting.getDescription())
                 .thumbnailUrl(jobPosting.getThumbnailUrl())
                 .detailImageUrl(jobPosting.getDetailImageUrl())

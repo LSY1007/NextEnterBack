@@ -35,4 +35,14 @@ public interface BookmarkRepository extends JpaRepository<Bookmark, Long> {
 
     // 사용자의 북마크 일괄 삭제 (여러 개)
     void deleteByUserIdAndJobPostingIdIn(Long userId, List<Long> jobPostingIds);
+    
+    //  정렬 기능 메서드
+    // 1. 기본 조회 (Pageable의 정렬 조건인 createdAt, desc 등을 그대로 따름)
+    Page<Bookmark> findByUserId(Long userId, Pageable pageable);
+
+    // 2. 마감임박순 조회 (JobPosting 테이블과 조인하여 deadline 오름차순 정렬)
+    @Query("SELECT b FROM Bookmark b JOIN JobPosting j ON b.jobPostingId = j.jobId " +
+            "WHERE b.userId = :userId " +
+            "ORDER BY j.deadline ASC")
+    Page<Bookmark> findByUserIdOrderByDeadline(@Param("userId") Long userId, Pageable pageable);
 }

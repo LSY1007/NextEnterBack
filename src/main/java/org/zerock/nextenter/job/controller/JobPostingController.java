@@ -34,11 +34,17 @@ public class JobPostingController {
     @Operation(summary = "공고 목록 조회")
     @GetMapping("/list")
     public ResponseEntity<Page<JobPostingListResponse>> getJobPostingList(
-            @Parameter(description = "직무 카테고리 (예: 백엔드, 프론트엔드)")
-            @RequestParam(required = false) String category,
+            @Parameter(description = "직무 카테고리 (예: 백엔드, 프론트엔드) - 쉼표로 구분")
+            @RequestParam(required = false) String jobCategories,
+
+            @Parameter(description = "지역 - 쉼표로 구분")
+            @RequestParam(required = false) String regions,
 
             @Parameter(description = "검색 키워드")
             @RequestParam(required = false) String keyword,
+
+            @Parameter(description = "상태 (ACTIVE, CLOSED, EXPIRED)")
+            @RequestParam(required = false) String status,
 
             @Parameter(description = "페이지 번호 (0부터 시작)", example = "0")
             @RequestParam(defaultValue = "0") int page,
@@ -46,10 +52,11 @@ public class JobPostingController {
             @Parameter(description = "페이지 크기", example = "10")
             @RequestParam(defaultValue = "10") int size
     ) {
-        log.info("GET /api/jobs - category: {}, keyword: {}, page: {}", category, keyword, page);
+        log.info("GET /api/jobs/list - jobCategories: {}, regions: {}, keyword: {}, status: {}, page: {}", 
+                jobCategories, regions, keyword, status, page);
 
         Page<JobPostingListResponse> jobs = jobPostingService
-                .getJobPostingList(category, keyword, page, size);
+                .getJobPostingList(jobCategories, regions, keyword, status, page, size);
 
         return ResponseEntity.ok(jobs);
     }
@@ -147,18 +154,5 @@ public class JobPostingController {
         response.put("message", "success");
 
         return ResponseEntity.ok(response);
-    }
-
-    @Operation(summary = "기업의 모든 공고 조회 (상태 무관)")
-    @GetMapping("/company/{companyId}")
-    public ResponseEntity<java.util.List<JobPostingListResponse>> getCompanyJobPostings(
-            @Parameter(description = "기업 ID", required = true, example = "1")
-            @PathVariable Long companyId
-    ) {
-        log.info("GET /api/jobs/company/{}", companyId);
-
-        java.util.List<JobPostingListResponse> jobs = jobPostingService.getCompanyJobPostings(companyId);
-
-        return ResponseEntity.ok(jobs);
     }
 }

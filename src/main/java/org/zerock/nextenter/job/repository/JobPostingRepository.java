@@ -72,4 +72,20 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, Long> {
     @Modifying
     @Query("UPDATE JobPosting j SET j.bookmarkCount = CASE WHEN j.bookmarkCount > 0 THEN j.bookmarkCount - 1 ELSE 0 END WHERE j.jobId = :jobId")
     void decrementBookmarkCount(@Param("jobId") Long jobId);
+
+    // 동적 필터 검색 (여러 조건 조합)
+    @Query("SELECT j FROM JobPosting j WHERE " +
+            "(:jobCategories IS NULL OR :jobCategories = '' OR j.jobCategory IN :categoryList) AND " +
+            "(:regions IS NULL OR :regions = '' OR j.location IN :regionList) AND " +
+            "(:keyword IS NULL OR :keyword = '' OR j.title LIKE %:keyword% OR j.description LIKE %:keyword%) AND " +
+            "j.status = :statusEnum " +  // statusEnum은 Service에서 항상 설정됨 (기본값 ACTIVE)
+            "ORDER BY j.createdAt DESC")
+    Page<JobPosting> searchByFilters(
+            @Param("jobCategories") String jobCategories,
+            @Param("categoryList") List<String> categoryList,
+            @Param("regions") String regions,
+            @Param("regionList") List<String> regionList,
+            @Param("keyword") String keyword,
+            @Param("statusEnum") JobPosting.Status statusEnum,  // status 대신 statusEnum만 사용
+            Pageable pageable);
 }

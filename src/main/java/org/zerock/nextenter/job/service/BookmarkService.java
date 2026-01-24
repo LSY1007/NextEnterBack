@@ -125,54 +125,60 @@ public class BookmarkService {
     }
 
     /**
-     * 북마크 목록 조회 (공고 정보 포함)
+     * 북마크 목록 조회 (정렬 로직 수정됨)
      */
     public Page<BookmarkedJobDto> getBookmarkedJobs(Long userId, Pageable pageable) {
-        // 1. 사용자의 북마크 목록 조회
-        Page<Bookmark> bookmarks = bookmarkRepository.findByUserIdOrderByCreatedAtDesc(userId, pageable);
+
+        Page<Bookmark> bookmarks;
+
+        // 1. 프론트에서 보낸 정렬 조건에 'deadline'이 있는지 확인
+        boolean isSortByDeadline = pageable.getSort().stream()
+                .anyMatch(order -> order.getProperty().equals("deadline"));
+
+        if (isSortByDeadline) {
+            // [마감임박순] -> 조인 쿼리 메서드 사용 (deadline ASC 강제 적용)
+            // pageable에서 sort 정보를 빼고 넘겨야 에러가 안 남
+            Pageable unsortedPageable = org.springframework.data.domain.PageRequest.of(
+                    pageable.getPageNumber(),
+                    pageable.getPageSize()
+            );
+            bookmarks = bookmarkRepository.findByUserIdOrderByDeadline(userId, unsortedPageable);
+        } else {
+            // [스크랩일순] -> 기본 메서드 사용 (createdAt DESC 등 Pageable 정렬 적용)
+            bookmarks = bookmarkRepository.findByUserId(userId, pageable);
+        }
 
         if (bookmarks.isEmpty()) {
             return Page.empty(pageable);
         }
 
-        // 2. 북마크된 공고 ID 목록
+        // --- 👇 (이 아래는 기존 코드와 완전히 동일합니다) ---
+
         List<Long> jobPostingIds = bookmarks.getContent().stream()
                 .map(Bookmark::getJobPostingId)
                 .collect(Collectors.toList());
 
-        // 3. 공고 정보 조회
         List<JobPosting> jobPostings = jobPostingRepository.findAllById(jobPostingIds);
 
-        // 4. 공고 Map으로 변환 (빠른 조회)
         Map<Long, JobPosting> jobPostingMap = jobPostings.stream()
                 .collect(Collectors.toMap(JobPosting::getJobId, jp -> jp));
 
-        // 5. 회사 ID 목록 추출
         List<Long> companyIds = jobPostings.stream()
                 .map(JobPosting::getCompanyId)
                 .distinct()
                 .collect(Collectors.toList());
 
-        // 6. 회사 정보 조회
         List<Company> companies = companyRepository.findAllById(companyIds);
         Map<Long, String> companyNameMap = companies.stream()
                 .collect(Collectors.toMap(Company::getCompanyId, Company::getCompanyName));
 
-        // 7. DTO 변환
         List<BookmarkedJobDto> dtos = bookmarks.getContent().stream()
                 .map(bookmark -> {
                     JobPosting job = jobPostingMap.get(bookmark.getJobPostingId());
-                    if (job == null) {
-                        return null;  // 공고가 삭제된 경우
-                    }
+                    if (job == null) return null;
 
-                    // 회사명 조회
                     String companyName = companyNameMap.getOrDefault(job.getCompanyId(), "알 수 없음");
-
-                    // 연봉 문자열 생성
                     String salaryStr = formatSalary(job.getSalaryMin(), job.getSalaryMax());
-
-                    // 경력 문자열 생성
                     String experienceStr = formatExperience(job.getExperienceMin(), job.getExperienceMax());
 
                     return BookmarkedJobDto.builder()
@@ -189,7 +195,7 @@ public class BookmarkService {
                             .status(job.getStatus().name())
                             .build();
                 })
-                .filter(dto -> dto != null)  // null 제거
+                .filter(dto -> dto != null)
                 .collect(Collectors.toList());
 
         return new PageImpl<>(dtos, pageable, bookmarks.getTotalElements());

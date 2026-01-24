@@ -15,6 +15,7 @@ import org.zerock.nextenter.job.entity.JobPosting;
 import org.zerock.nextenter.job.repository.BookmarkRepository;
 import org.zerock.nextenter.job.repository.JobPostingRepository;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -33,32 +34,50 @@ public class JobPostingService {
      * 공고 목록 조회 (필터링 + 검색 + 페이징)
      */
     public Page<JobPostingListResponse> getJobPostingList(
-            String category, String keyword, int page, int size) {
+            String jobCategories, String regions, String keyword, String status, int page, int size) {
 
-        log.info("공고 목록 조회 - category: {}, keyword: {}, page: {}", category, keyword, page);
+        log.info("공고 목록 조회 - jobCategories: {}, regions: {}, keyword: {}, status: {}, page: {}", 
+                jobCategories, regions, keyword, status, page);
 
         Pageable pageable = PageRequest.of(page, size);
         Page<JobPosting> jobPage;
 
-        // 1. 카테고리 + 키워드 모두 있음
-        if (category != null && !category.isEmpty() && keyword != null && !keyword.isEmpty()) {
-            jobPage = jobPostingRepository.searchByCategoryAndKeyword(
-                    category, keyword, JobPosting.Status.ACTIVE, pageable);
-        }
-        // 2. 카테고리만 있음
-        else if (category != null && !category.isEmpty()) {
-            jobPage = jobPostingRepository.findByJobCategoryAndStatusOrderByCreatedAtDesc(
-                    category, JobPosting.Status.ACTIVE, pageable);
-        }
-        // 3. 키워드만 있음
-        else if (keyword != null && !keyword.isEmpty()) {
-            jobPage = jobPostingRepository.searchByKeyword(
-                    keyword, JobPosting.Status.ACTIVE, pageable);
-        }
-        // 4. 둘 다 없음 (전체 조회)
-        else {
+        // 모든 필터가 비어있으면 전체 조회
+        if ((jobCategories == null || jobCategories.isEmpty()) &&
+            (regions == null || regions.isEmpty()) &&
+            (keyword == null || keyword.isEmpty()) &&
+            (status == null || status.isEmpty())) {
+            
             jobPage = jobPostingRepository.findByStatusOrderByCreatedAtDesc(
                     JobPosting.Status.ACTIVE, pageable);
+        } else {
+            // 문자열을 리스트로 변환
+            List<String> categoryList = (jobCategories != null && !jobCategories.isEmpty()) 
+                    ? Arrays.asList(jobCategories.split(",")) 
+                    : null;
+            
+            List<String> regionList = (regions != null && !regions.isEmpty()) 
+                    ? Arrays.asList(regions.split(",")) 
+                    : null;
+            
+            // status Enum 변환 (null이면 기본값 ACTIVE)
+            JobPosting.Status statusEnum = JobPosting.Status.ACTIVE; // 기본값
+            if (status != null && !status.isEmpty()) {
+                try {
+                    statusEnum = JobPosting.Status.valueOf(status.toUpperCase());
+                } catch (IllegalArgumentException e) {
+                    log.warn("유효하지 않은 status 값: {}", status);
+                    statusEnum = JobPosting.Status.ACTIVE;
+                }
+            }
+            
+            // 필터 조건이 있으면 동적 검색 사용
+            jobPage = jobPostingRepository.searchByFilters(
+                    jobCategories, categoryList,
+                    regions, regionList,
+                    keyword,
+                    statusEnum,
+                    pageable);
         }
 
         return jobPage.map(this::convertToListResponse);
@@ -100,8 +119,6 @@ public class JobPostingService {
                 .location(request.getLocation())
                 .locationCity(request.getLocationCity()) // 시/도 정보 추가
                 .description(request.getDescription())
-                .thumbnailUrl(request.getThumbnailUrl())
-                .detailImageUrl(request.getDetailImageUrl())
                 .deadline(request.getDeadline())
                 .status(request.getStatus() != null && !request.getStatus().isEmpty() ?
                         JobPosting.Status.valueOf(request.getStatus().toUpperCase()) : JobPosting.Status.ACTIVE)
@@ -159,12 +176,6 @@ public class JobPostingService {
         }
         if (request.getDescription() != null) {
             jobPosting.setDescription(request.getDescription());
-        }
-        if (request.getThumbnailUrl() != null) {
-            jobPosting.setThumbnailUrl(request.getThumbnailUrl());
-        }
-        if (request.getDetailImageUrl() != null) {
-            jobPosting.setDetailImageUrl(request.getDetailImageUrl());
         }
         if (request.getDeadline() != null) {
             jobPosting.setDeadline(request.getDeadline());
@@ -255,7 +266,6 @@ public class JobPostingService {
                 .title(jobPosting.getTitle())
                 .companyName(companyName)
                 .logoUrl(logoUrl)
-                .thumbnailUrl(jobPosting.getThumbnailUrl())
                 .jobCategory(jobPosting.getJobCategory())
                 .location(jobPosting.getLocation())
                 .locationCity(jobPosting.getLocationCity()) // 시/도 정보 추가
@@ -310,8 +320,6 @@ public class JobPostingService {
                 .location(jobPosting.getLocation())
                 .locationCity(jobPosting.getLocationCity()) // 시/도 정보 추가
                 .description(jobPosting.getDescription())
-                .thumbnailUrl(jobPosting.getThumbnailUrl())
-                .detailImageUrl(jobPosting.getDetailImageUrl())
                 .deadline(jobPosting.getDeadline())
                 .status(jobPosting.getStatus().name())
                 .viewCount(jobPosting.getViewCount())

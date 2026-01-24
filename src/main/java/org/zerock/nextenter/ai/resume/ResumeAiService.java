@@ -48,7 +48,7 @@ public class ResumeAiService {
             headers.setContentType(new MediaType("application", "json", StandardCharsets.UTF_8));
 
             // 3. 데이터 준비 (위에서 수정한 DTO 로직 사용)
-            Map<String, Object> aiRequestMap = request.toAiRequestMap();
+            Map<String, Object> aiRequestMap = request.toAiFormat();
             
             // 4. JSON 문자열로 직접 변환 (눈으로 확인 가능)
             String jsonPayload = objectMapper.writeValueAsString(aiRequestMap);

@@ -325,57 +325,92 @@ public class ApplyService {
         }
 
         // structuredData에서 상세 정보 추출
-        String education = null;
-        String certifications = null;
+        String gender = null;
+        String birthDate = null;
+        String address = null;
+        String profileImage = null;
+        String coverLetterTitle = null;
         String coverLetterContent = null;
-        String experience = "5년"; // 기본값
+        String experience = "신입"; // 기본값
+        
+        List<ApplyResponse.ExperienceItem> experiences = new java.util.ArrayList<>();
+        List<ApplyResponse.CertificateItem> certificates = new java.util.ArrayList<>();
+        List<ApplyResponse.EducationItem> educations = new java.util.ArrayList<>();
+        List<ApplyResponse.CareerItem> careers = new java.util.ArrayList<>();
         
         if (resume != null && resume.getStructuredData() != null) {
             try {
                 com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
                 com.fasterxml.jackson.databind.JsonNode root = mapper.readTree(resume.getStructuredData());
                 
+                // 인적사항 정보 추출
+                if (root.has("personalInfo")) {
+                    com.fasterxml.jackson.databind.JsonNode personalInfo = root.get("personalInfo");
+                    if (personalInfo.has("gender")) {
+                        gender = personalInfo.get("gender").asText();
+                    }
+                    if (personalInfo.has("birthDate")) {
+                        birthDate = personalInfo.get("birthDate").asText();
+                    }
+                    if (personalInfo.has("address")) {
+                        address = personalInfo.get("address").asText();
+                    }
+                    if (personalInfo.has("profileImage")) {
+                        profileImage = personalInfo.get("profileImage").asText();
+                    }
+                }
+                
+                // 경험/활동/교육 정보 추출
+                if (root.has("experiences")) {
+                    com.fasterxml.jackson.databind.JsonNode experiencesNode = root.get("experiences");
+                    for (com.fasterxml.jackson.databind.JsonNode exp : experiencesNode) {
+                        if (exp.has("title") && exp.has("period")) {
+                            experiences.add(ApplyResponse.ExperienceItem.builder()
+                                    .title(exp.get("title").asText())
+                                    .period(exp.get("period").asText())
+                                    .build());
+                        }
+                    }
+                }
+                
+                // 자격증/어학/수상 정보 추출
+                if (root.has("certificates")) {
+                    com.fasterxml.jackson.databind.JsonNode certificatesNode = root.get("certificates");
+                    for (com.fasterxml.jackson.databind.JsonNode cert : certificatesNode) {
+                        if (cert.has("title") && cert.has("date")) {
+                            certificates.add(ApplyResponse.CertificateItem.builder()
+                                    .title(cert.get("title").asText())
+                                    .date(cert.get("date").asText())
+                                    .build());
+                        }
+                    }
+                }
+                
                 // 학력 정보 추출
                 if (root.has("educations")) {
-                    com.fasterxml.jackson.databind.JsonNode educations = root.get("educations");
-                    StringBuilder eduBuilder = new StringBuilder();
-                    for (com.fasterxml.jackson.databind.JsonNode edu : educations) {
+                    com.fasterxml.jackson.databind.JsonNode educationsNode = root.get("educations");
+                    for (com.fasterxml.jackson.databind.JsonNode edu : educationsNode) {
                         if (edu.has("school") && edu.has("period")) {
-                            eduBuilder.append(edu.get("school").asText())
-                                    .append(" | ")
-                                    .append(edu.get("period").asText())
-                                    .append("\n");
+                            educations.add(ApplyResponse.EducationItem.builder()
+                                    .school(edu.get("school").asText())
+                                    .period(edu.get("period").asText())
+                                    .build());
                         }
-                    }
-                    if (eduBuilder.length() > 0) {
-                        education = eduBuilder.toString().trim();
                     }
                 }
                 
-                // 자격증 정보 추출
-                if (root.has("certificates")) {
-                    com.fasterxml.jackson.databind.JsonNode certificates = root.get("certificates");
-                    StringBuilder certBuilder = new StringBuilder();
-                    for (com.fasterxml.jackson.databind.JsonNode cert : certificates) {
-                        if (cert.has("title") && cert.has("date")) {
-                            certBuilder.append(cert.get("title").asText())
-                                    .append(" | ")
-                                    .append(cert.get("date").asText())
-                                    .append("\n");
-                        }
-                    }
-                    if (certBuilder.length() > 0) {
-                        certifications = certBuilder.toString().trim();
-                    }
-                }
-                
-                // 경력 정보 추출
+                // 경력 정보 추출 및 경력 년수 계산
                 if (root.has("careers")) {
-                    com.fasterxml.jackson.databind.JsonNode careers = root.get("careers");
-                    if (careers.isArray() && careers.size() > 0) {
+                    com.fasterxml.jackson.databind.JsonNode careersNode = root.get("careers");
+                    if (careersNode.isArray() && careersNode.size() > 0) {
                         int totalMonths = 0;
-                        for (com.fasterxml.jackson.databind.JsonNode career : careers) {
-                            if (career.has("period")) {
+                        for (com.fasterxml.jackson.databind.JsonNode career : careersNode) {
+                            if (career.has("company") && career.has("period")) {
+                                careers.add(ApplyResponse.CareerItem.builder()
+                                        .company(career.get("company").asText())
+                                        .period(career.get("period").asText())
+                                        .build());
+                                
                                 String period = career.get("period").asText();
                                 totalMonths += parsePeriodToMonths(period);
                             }
@@ -383,13 +418,14 @@ public class ApplyService {
                         int years = totalMonths / 12;
                         experience = years > 0 ? years + "년" : "신입";
                     }
-                } else {
-                    experience = "신입"; // 경력 없으면 신입
                 }
                 
                 // 자기소개서 정보 추출
                 if (root.has("coverLetter")) {
                     com.fasterxml.jackson.databind.JsonNode coverLetter = root.get("coverLetter");
+                    if (coverLetter.has("title")) {
+                        coverLetterTitle = coverLetter.get("title").asText();
+                    }
                     if (coverLetter.has("content")) {
                         coverLetterContent = coverLetter.get("content").asText();
                     }
@@ -411,13 +447,22 @@ public class ApplyService {
                 .userPhone(user != null ? user.getPhone() : null)
                 .jobTitle(job != null ? job.getTitle() : "알 수 없음")
                 .jobCategory(job != null ? job.getJobCategory() : "알 수 없음")
-                // 이력서 정보
+                // 이력서 인적사항
                 .resumeTitle(resume != null ? resume.getTitle() : null)
+                .gender(gender)
+                .birthDate(birthDate)
+                .address(address)
+                .profileImage(profileImage)
+                // 이력서 스킬 및 경력
                 .skills(skills)
                 .experience(experience)
-                .education(education)
-                .certifications(certifications)
+                // 이력서 상세 정보
+                .experiences(experiences)
+                .certificates(certificates)
+                .educations(educations)
+                .careers(careers)
                 // 자기소개서 정보
+                .coverLetterTitle(coverLetterTitle)
                 .coverLetterContent(coverLetterContent)
                 .status(apply.getStatus().name())
                 .aiScore(apply.getAiScore())

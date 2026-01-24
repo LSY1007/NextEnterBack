@@ -50,6 +50,9 @@ public class JobPosting {
     @Column(length = 100)
     private String location;
 
+    @Column(name = "location_city", length = 50)
+    private String locationCity; // 시/도 정보 (필터링용)
+
     @Column(columnDefinition = "TEXT")
     private String description;
 

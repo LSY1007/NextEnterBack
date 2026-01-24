@@ -30,11 +30,21 @@ public class NotificationService {
             Long relatedId,
             String relatedType
     ) {
+        log.info("==========================================");
+        log.info("알림 생성 시작");
+        log.info("userId: {}, userType: {}, type: {}", userId, userType, type);
+        log.info("title: {}, content: {}", title, content);
+        log.info("==========================================");
+        
         // 알림 설정 확인
-        if (!settingsService.isNotificationEnabled(userId, userType, type.name())) {
-            log.info("알림이 비활성화되어 있어 전송하지 않음: userId={}, type={}", userId, type);
+        boolean isEnabled = settingsService.isNotificationEnabled(userId, userType, type.name());
+        log.info("알림 활성화 여부: {}", isEnabled);
+        
+        if (!isEnabled) {
+            log.warn("❌ 알림이 비활성화되어 있어 전송하지 않음: userId={}, type={}", userId, type);
             return null;
         }
+        
         // 알림 생성
         Notification notification = Notification.builder()
                 .userId(userId)
@@ -48,10 +58,15 @@ public class NotificationService {
                 .build();
         
         notification = notificationRepository.save(notification);
-        log.info("알림 생성: userId={}, type={}, title={}", userId, type, title);
+        log.info("✅ 알림 DB 저장 완료: id={}", notification.getId());
         
         // 웹소켓으로 실시간 알림 전송
-        sendNotificationViaWebSocket(notification);
+        try {
+            sendNotificationViaWebSocket(notification);
+            log.info("✅ 웹소켓 전송 성공");
+        } catch (Exception e) {
+            log.error("❌ 웹소켓 전송 실패", e);
+        }
         
         return notification;
     }
@@ -64,9 +79,18 @@ public class NotificationService {
                 notification.getUserType().toLowerCase(),
                 notification.getUserId());
         
+        log.info("웹소켓 전송 시도: destination={}", destination);
+        
         NotificationDTO dto = NotificationDTO.fromEntity(notification);
-        messagingTemplate.convertAndSend(destination, dto);
-        log.info("웹소켓 알림 전송: {}", destination);
+        log.info("DTO 변환 완료: {}", dto);
+        
+        try {
+            messagingTemplate.convertAndSend(destination, dto);
+            log.info("✅ 웹소켓 메시지 전송 완료: {}", destination);
+        } catch (Exception e) {
+            log.error("❌ 웹소켓 전송 중 오류 발생", e);
+            throw e;
+        }
     }
     
     /**
@@ -123,7 +147,7 @@ public class NotificationService {
     @Transactional
     public void deleteNotification(Long notificationId) {
         notificationRepository.deleteById(notificationId);
-        log.info("알림 삭제: notificationId={}", notificationId);
+        log.info("알림 삭제: id={}", notificationId);
     }
     
     // ====== 특정 이벤트에 대한 알림 생성 메서드 ======
@@ -212,13 +236,18 @@ public class NotificationService {
      * 면접 제안 알림 (개인용)
      */
     @Transactional
-    public void notifyInterviewOffer(Long userId, String companyName, String jobTitle, Long interviewId) {
+    public void notifyInterviewOffer(Long userId, String companyName, String jobTitle, Long interviewId, String customMessage) {
+        // 기업이 작성한 메시지가 있으면 그것을 사용하고, 없으면 기본 메시지 사용
+        String content = (customMessage != null && !customMessage.trim().isEmpty()) 
+            ? customMessage
+            : String.format("%s에서 '%s' 포지션 면접을 제안했습니다.", companyName, jobTitle);
+        
         createAndSendNotification(
                 userId,
                 "INDIVIDUAL",
                 Notification.NotificationType.INTERVIEW_OFFER,
                 "면접 제안",
-                String.format("%s에서 '%s' 포지션 면접을 제안했습니다.", companyName, jobTitle),
+                content,
                 interviewId,
                 "INTERVIEW"
         );
@@ -237,6 +266,22 @@ public class NotificationService {
                 String.format("%s 지원서가 '%s'(으)로 변경되었습니다.", companyName, status),
                 applicationId,
                 "APPLICATION"
+        );
+    }
+    
+    /**
+     * 연락 제안 응답 알림 (기업용)
+     */
+    @Transactional
+    public void notifyContactResponse(Long companyId, String talentName, String status, Long contactId) {
+        createAndSendNotification(
+                companyId,
+                "COMPANY",
+                Notification.NotificationType.INTERVIEW_ACCEPTED, // 수락/거절 모두 이 타입 사용
+                "연락 제안 응답",
+                String.format("%s님이 연락 제안을 %s했습니다.", talentName, status),
+                contactId,
+                "CONTACT"
         );
     }
 }

@@ -13,6 +13,9 @@ import org.zerock.nextenter.resume.entity.TalentContact;
 import org.zerock.nextenter.resume.repository.ResumeRepository;
 import org.zerock.nextenter.resume.repository.SavedTalentRepository;
 import org.zerock.nextenter.resume.repository.TalentContactRepository;
+import org.zerock.nextenter.notification.NotificationService;
+import org.zerock.nextenter.user.entity.User;
+import org.zerock.nextenter.user.repository.UserRepository;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -27,6 +30,8 @@ public class TalentService {
     private final SavedTalentRepository savedTalentRepository;
     private final TalentContactRepository talentContactRepository;
     private final ResumeRepository resumeRepository;
+    private final UserRepository userRepository;
+    private final NotificationService notificationService;
 
     /**
      * 스크랩한 인재 목록 조회
@@ -175,6 +180,19 @@ public class TalentService {
             throw new IllegalArgumentException("비공개 이력서에는 연락할 수 없습니다");
         }
 
+        // ✅ 이미 연락한 인재인지 확인
+        TalentContact existingContact = getLatestContact(companyUserId, resumeId);
+        if (existingContact != null) {
+            String status = existingContact.getStatus();
+            if ("ACCEPTED".equals(status)) {
+                throw new IllegalArgumentException("이미 면접 제안이 수락되었습니다. 더 이상 연락할 수 없습니다.");
+            } else if ("PENDING".equals(status)) {
+                throw new IllegalArgumentException("이미 연락 대기중입니다. 응답을 기다려주세요.");
+            } else if ("REJECTED".equals(status)) {
+                throw new IllegalArgumentException("이전 연락이 거절되었습니다. 재연락이 제한됩니다.");
+            }
+        }
+
         TalentContact contact = TalentContact.builder()
                 .companyUserId(companyUserId)
                 .resumeId(resumeId)
@@ -183,8 +201,36 @@ public class TalentService {
                 .status("PENDING")
                 .build();
 
-        talentContactRepository.save(contact);
-        log.info("연락 요청 완료");
+        contact = talentContactRepository.save(contact);
+        log.info("연락 요청 완료 - contactId: {}", contact.getContactId());
+        
+        // 인재에게 연락 알림 전송
+        try {
+            // 기업 사용자 정보에서 회사명 가져오기
+            User companyUser = userRepository.findById(companyUserId).orElse(null);
+            String companyName = companyUser != null && companyUser.getName() != null 
+                ? companyUser.getName() : "기업";
+            
+            String jobTitle = resume.getJobCategory() != null 
+                ? resume.getJobCategory() : "포지션";
+            
+            log.info("알림 전송 시도 - talentUserId: {}, companyName: {}, jobTitle: {}", 
+                resume.getUserId(), companyName, jobTitle);
+            
+            notificationService.notifyInterviewOffer(
+                resume.getUserId(),
+                companyName,
+                jobTitle,
+                contact.getContactId(),
+                message  // 기업이 작성한 메시지 전달
+            );
+            
+            log.info("인재 연락 알림 전송 성공!");
+        } catch (Exception e) {
+            log.error("인재 연락 알림 전송 실패", e);
+            // 알림 실패해도 연락은 저장됨
+        }
+        
         return contact;
     }
 
@@ -221,6 +267,33 @@ public class TalentService {
         contact.setStatus(status);
         talentContactRepository.save(contact);
         log.info("연락 메시지 상태 변경 완료 - new status: {}", status);
+        
+        // ✅ 기업에게 알림 전송
+        try {
+            // 인재 정보 가져오기
+            User talentUser = userRepository.findById(talentUserId).orElse(null);
+            String talentName = talentUser != null && talentUser.getName() != null 
+                ? talentUser.getName() : "인재";
+            
+            // 상태에 따른 알림 메시지
+            String statusText = status.equals("ACCEPTED") ? "수락" : "거절";
+            
+            log.info("알림 전송 시도 - companyUserId: {}, talentName: {}, status: {}", 
+                contact.getCompanyUserId(), talentName, statusText);
+            
+            notificationService.notifyContactResponse(
+                contact.getCompanyUserId(),
+                talentName,
+                statusText,
+                contactId
+            );
+            
+            log.info("연락 제안 응답 알림 전송 성공!");
+        } catch (Exception e) {
+            log.error("연락 제안 응답 알림 전송 실패", e);
+            // 알림 실패해도 상태 변경은 저장됨
+        }
+        
         return true;
     }
 

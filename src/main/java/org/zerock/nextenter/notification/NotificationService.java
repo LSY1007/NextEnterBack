@@ -236,13 +236,18 @@ public class NotificationService {
      * 면접 제안 알림 (개인용)
      */
     @Transactional
-    public void notifyInterviewOffer(Long userId, String companyName, String jobTitle, Long interviewId) {
+    public void notifyInterviewOffer(Long userId, String companyName, String jobTitle, Long interviewId, String customMessage) {
+        // 기업이 작성한 메시지가 있으면 그것을 사용하고, 없으면 기본 메시지 사용
+        String content = (customMessage != null && !customMessage.trim().isEmpty()) 
+            ? customMessage
+            : String.format("%s에서 '%s' 포지션 면접을 제안했습니다.", companyName, jobTitle);
+        
         createAndSendNotification(
                 userId,
                 "INDIVIDUAL",
                 Notification.NotificationType.INTERVIEW_OFFER,
                 "면접 제안",
-                String.format("%s에서 '%s' 포지션 면접을 제안했습니다.", companyName, jobTitle),
+                content,
                 interviewId,
                 "INTERVIEW"
         );

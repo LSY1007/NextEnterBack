@@ -427,7 +427,6 @@ public class ApplyService {
                 .updatedAt(apply.getUpdatedAt())
                 .build();
     }
-<<<<<<< Updated upstream
     
     // 기간 문자열을 개월수로 변환
     private int parsePeriodToMonths(String period) {
@@ -457,6 +456,3 @@ public class ApplyService {
         return 0;
     }
 }
-=======
-}
->>>>>>> Stashed changes

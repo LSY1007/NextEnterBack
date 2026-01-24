@@ -180,6 +180,19 @@ public class TalentService {
             throw new IllegalArgumentException("비공개 이력서에는 연락할 수 없습니다");
         }
 
+        // ✅ 이미 연락한 인재인지 확인
+        TalentContact existingContact = getLatestContact(companyUserId, resumeId);
+        if (existingContact != null) {
+            String status = existingContact.getStatus();
+            if ("ACCEPTED".equals(status)) {
+                throw new IllegalArgumentException("이미 면접 제안이 수락되었습니다. 더 이상 연락할 수 없습니다.");
+            } else if ("PENDING".equals(status)) {
+                throw new IllegalArgumentException("이미 연락 대기중입니다. 응답을 기다려주세요.");
+            } else if ("REJECTED".equals(status)) {
+                throw new IllegalArgumentException("이전 연락이 거절되었습니다. 재연락이 제한됩니다.");
+            }
+        }
+
         TalentContact contact = TalentContact.builder()
                 .companyUserId(companyUserId)
                 .resumeId(resumeId)
@@ -208,7 +221,8 @@ public class TalentService {
                 resume.getUserId(),
                 companyName,
                 jobTitle,
-                contact.getContactId()
+                contact.getContactId(),
+                message  // 기업이 작성한 메시지 전달
             );
             
             log.info("인재 연락 알림 전송 성공!");

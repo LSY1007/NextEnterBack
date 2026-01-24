@@ -107,10 +107,10 @@ public class AiRecommendRequest {
         List<Map<String, String>> pythonEdu = new ArrayList<>();
         for (String edu : cleanEducations) {
             Map<String, String> map = new HashMap<>();
-            map.put("school_name", edu); // 핵심 정보
-            map.put("major", "상세 내용 본문 참조"); // 억지 매핑 제거
-            map.put("degree", "상세 내용 본문 참조"); 
-            map.put("status", "졸업/수료");
+            map.put("school_name", edu); 
+            map.put("major", edu); // 파이썬이 major를 볼 수 있으므로 여기에도 값을 넣어줌
+            map.put("degree", "학사"); // 기본값 설정 (없으면 null보단 나음)
+            map.put("status", "졸업");
             pythonEdu.add(map);
         }
         contentMap.put("education", pythonEdu);
@@ -119,10 +119,12 @@ public class AiRecommendRequest {
         List<Map<String, String>> pythonCareer = new ArrayList<>();
         for (String career : cleanCareers) {
             Map<String, String> map = new HashMap<>();
-            map.put("company_name", career); // 핵심 정보
-            map.put("role", "상세 내용 본문 참조"); 
-            map.put("period", "기간 정보 본문 참조"); // 기간을 모르면 모른다고 명시
-            map.put("description", career); // 설명에는 원본 텍스트 포함
+            map.put("role", "Backend Developer"); // 기본값 혹은 파싱된 값
+            map.put("company_name", career);
+            map.put("period", "3년"); // 기본값 (raw_text 참조 유도)
+            map.put("description", career);
+            // ⭐ 파이썬 요구사항: key_tasks는 리스트여야 함
+            map.put("key_tasks", Collections.singletonList(career)); 
             pythonCareer.add(map);
         }
         contentMap.put("professional_experience", pythonCareer);
@@ -188,7 +190,7 @@ public class AiRecommendRequest {
                 "school", "schoolName", "school_name", 
                 "project", "projectName", "project_title", 
                 "title", "name", "value", "role", "position", 
-                "period", "date", "description", "desc"
+                "period", "date", "description", "desc", "career", "careers"
             };
             
             for (String key : keysToCheck) {

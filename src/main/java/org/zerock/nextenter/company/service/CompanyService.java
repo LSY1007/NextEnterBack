@@ -1,6 +1,5 @@
 package org.zerock.nextenter.company.service;
 
-
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -75,8 +74,8 @@ public class CompanyService {
         // 이메일과 사업자등록번호로 기업 조회
         Company company = companyRepository.findByEmailAndBusinessNumber(
                 request.getEmail(),
-                request.getBusinessNumber()
-        ).orElseThrow(() -> new IllegalArgumentException("이메일, 비밀번호 또는 사업자등록번호가 일치하지 않습니다."));
+                request.getBusinessNumber())
+                .orElseThrow(() -> new IllegalArgumentException("이메일, 비밀번호 또는 사업자등록번호가 일치하지 않습니다."));
 
         // 활성화 여부 확인
         if (!company.getIsActive()) {
@@ -126,8 +125,7 @@ public class CompanyService {
                 company.getEmail(),
                 company.getName(),
                 "WITHDRAWAL",
-                "COMPANY"
-        );
+                "COMPANY");
 
         log.info("기업 회원탈퇴 인증코드 발송: companyId={}, email={}", companyId, company.getEmail());
     }
@@ -144,8 +142,7 @@ public class CompanyService {
         boolean isValid = verificationCodeService.verifyCode(
                 company.getEmail(),
                 verificationCode,
-                "WITHDRAWAL"
-        );
+                "WITHDRAWAL");
 
         if (!isValid) {
             throw new IllegalArgumentException("인증코드가 유효하지 않거나 만료되었습니다.");
@@ -270,12 +267,18 @@ public class CompanyService {
      * 직원 수를 기업 규모 문자열로 변환
      */
     private String convertEmployeeCountToSize(Integer employeeCount) {
-        if (employeeCount == null) return "";
-        if (employeeCount <= 10) return "1-10명";
-        if (employeeCount <= 50) return "11-50명";
-        if (employeeCount <= 200) return "51-200명";
-        if (employeeCount <= 500) return "201-500명";
-        if (employeeCount <= 1000) return "501-1000명";
+        if (employeeCount == null)
+            return "";
+        if (employeeCount <= 10)
+            return "1-10명";
+        if (employeeCount <= 50)
+            return "11-50명";
+        if (employeeCount <= 200)
+            return "51-200명";
+        if (employeeCount <= 500)
+            return "201-500명";
+        if (employeeCount <= 1000)
+            return "501-1000명";
         return "1000명 이상";
     }
 }

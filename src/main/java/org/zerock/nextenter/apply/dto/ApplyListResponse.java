@@ -34,4 +34,9 @@ public class ApplyListResponse {
     private Integer aiScore;
 
     private LocalDateTime appliedAt;
+
+    // 공고 상세 정보
+    private String companyName;
+    private String location;
+    private String deadline;
 }

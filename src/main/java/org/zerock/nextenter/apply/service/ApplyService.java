@@ -235,17 +235,15 @@ public class ApplyService {
         Resume resume = apply.getResumeId() != null ?
                 resumeRepository.findById(apply.getResumeId()).orElse(null) : null;
 
-        // 기술 스택 파싱 (JSON 배열 또는 쉼표 구분 문자열)
+        // 기술 스택 파싱 (기존 로직 유지)
         List<String> skills = List.of();
         if (resume != null && resume.getSkills() != null && !resume.getSkills().isEmpty()) {
             try {
-                // JSON 배열로 파싱 시도
                 if (resume.getSkills().trim().startsWith("[")) {
                     com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-                    skills = mapper.readValue(resume.getSkills(), 
+                    skills = mapper.readValue(resume.getSkills(),
                             mapper.getTypeFactory().constructCollectionType(List.class, String.class));
                 } else {
-                    // 쉼표 구분 문자열로 파싱
                     skills = Arrays.stream(resume.getSkills().split(","))
                             .map(String::trim)
                             .filter(s -> !s.isEmpty())
@@ -263,12 +261,37 @@ public class ApplyService {
         // 경력 계산 (임시 - 추후 Resume에서 파싱)
         String experience = "5년"; // TODO: structuredData에서 파싱
 
+        String companyNameVal = "알 수 없음";
+        String locationVal = "";
+        String deadlineVal = "";
+
+        if (job != null) {
+            // 1. 회사명: JobPosting엔 companyId만 있으므로 임시로 ID 표시
+            // (실제 회사명을 띄우려면 CompanyRepository 추가 연결이 필요합니다)
+            companyNameVal = "(주)회사-" + job.getCompanyId();
+
+            // 2. 지역: null 체크 후 할당
+            if (job.getLocation() != null) {
+                locationVal = job.getLocation();
+            }
+
+            // 3. 마감일: LocalDate -> String 변환
+            if (job.getDeadline() != null) {
+                deadlineVal = job.getDeadline().toString();
+            }
+        }
+
         return ApplyListResponse.builder()
                 .applyId(apply.getApplyId())
                 .userId(apply.getUserId())
                 .jobId(apply.getJobId())
                 .userName(user != null ? user.getName() : "알 수 없음")
                 .userAge(user != null ? user.getAge() : null)
+                // 진규 - 이력서 내역 확인 추가 (이 아래 3줄.)
+                // 위에서 안전하게 변환한 값을 넣습니다.
+                .companyName(companyNameVal)
+                .location(locationVal)
+                .deadline(deadlineVal)
                 .jobTitle(job != null ? job.getTitle() : "알 수 없음")
                 .jobCategory(job != null ? job.getJobCategory() : "알 수 없음")
                 .skills(skills)
@@ -429,7 +452,8 @@ public class ApplyService {
             // "2019.2" -> [2019, 2]
             String[] startParts = start.split("\\.");
             String[] endParts = end.split("\\.");
-            
+
+
             if (startParts.length >= 2 && endParts.length >= 2) {
                 int startYear = Integer.parseInt(startParts[0]);
                 int startMonth = Integer.parseInt(startParts[1]);

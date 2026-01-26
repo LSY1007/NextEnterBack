@@ -1,19 +1,20 @@
 package org.zerock.nextenter.ai.resume.dto;
 
-import com.fasterxml.jackson.annotation.JsonAlias;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import lombok.*;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * [최종_정제_완성본_V6]
- * 1. 데이터 중복 제거: 모든 필드에 같은 값을 넣는 대신, 핵심 필드에만 값을 넣고 나머지는 '본문 참조'로 처리
- * 2. 가독성 향상: 파이썬 로그 및 데이터 구조가 훨씬 깔끔해짐
- * 3. Object 타입 유지: 프론트엔드의 데이터 형태(문자열/리스트/객체) 변화에 유연하게 대응
- */
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
+
 @Getter
 @Setter
 @NoArgsConstructor
@@ -26,23 +27,22 @@ public class AiRecommendRequest {
     private Long resumeId;
     private Long userId;
 
-    @JsonAlias({"content"}) 
-    private Object resumeText; 
-    
-    private String jobCategory;
-    
+    @JsonAlias({"content"})
+    private Object resumeText;
+
+    private String jobCategory; // 희망 직무
+
     // [스킬]
     @Builder.Default
-    @JsonAlias({"skill", "techStack", "skills"})
-    private Object skills = new ArrayList<>(); 
-    
-    // [경력 기간]
+    @JsonAlias({"skill", "skills"})
+    private Object skills = new ArrayList<>();
+
     private Integer experience;       // 년
-    private Integer experienceMonths; // 월
-    
+    private Integer experienceMonths; // 개월
+
     // [학력]
     @Builder.Default
-    @JsonAlias({"education", "school", "educations"}) 
+    @JsonAlias({"education", "educations"})
     private Object educations = new ArrayList<>();
 
     // [경력]
@@ -52,43 +52,44 @@ public class AiRecommendRequest {
 
     // [프로젝트]
     @Builder.Default
-    @JsonAlias({"project", "projects", "activities", "experiences", "project_experience", "project_experiences"}) 
+    @JsonAlias({"project", "projects", "activities", "experiences", "project_experience", "project_experiences"})
     private Object projects = new ArrayList<>();
-    
-    private String preferredLocation; 
-    
+
+    private String preferredLocation;
+
     // ---------------------------------------------------------
-    // 🚀 데이터 변환 로직
+    // AI 이력서 변환 로직
     // ---------------------------------------------------------
-    public Map<String, Object> toAiRequestMap() {
+    public Map<String, Object> toAiFormat() {
         Map<String, Object> result = new HashMap<>();
-        
+
         result.put("id", resumeId != null ? String.valueOf(resumeId) : "unknown");
         result.put("target_role", convertJobCategoryToRole(this.jobCategory));
-        
-        // 데이터 정제 (String List로 변환)
+
+        // 이력서 데이터 (String List로 변환)
+        List<String> cleanSkills = extractTextList(this.skills);
         List<String> cleanEducations = extractTextList(this.educations);
         List<String> cleanCareers = extractTextList(this.careers);
         List<String> cleanProjects = extractTextList(this.projects);
-        List<String> cleanSkills = extractTextList(this.skills);
 
-        // 1. [raw_text 통합] AI가 읽을 전체 텍스트 생성
+        // 1. [raw_text 통합] AI가 이를 전체 텍스트로 인식
         StringBuilder fullTextBuilder = new StringBuilder();
         String extractedResumeBody = extractString(this.resumeText);
         if (extractedResumeBody != null && !extractedResumeBody.isEmpty()) {
             fullTextBuilder.append(extractedResumeBody);
         }
-        
-        // 총 경력 기간 텍스트화
+
+        // 및 경력 기간 텍스트화
         int years = (this.experience != null) ? this.experience : 0;
         int months = (this.experienceMonths != null) ? this.experienceMonths : 0;
         if (years > 0 || months > 0) {
-            fullTextBuilder.append("\n\n[총 경력] ").append(years).append("년 ").append(months).append("개월");
+            fullTextBuilder.append("\n\n[총 경력] ").append(years).append("년").append(months).append("개월");
         }
-        
-        appendSection(fullTextBuilder, "[경력 사항]", cleanCareers);
+
+        appendSection(fullTextBuilder, "[경력]", cleanCareers);
         appendSection(fullTextBuilder, "[프로젝트 및 경험]", cleanProjects);
         appendSection(fullTextBuilder, "[학력 사항]", cleanEducations);
+
         if (!cleanSkills.isEmpty()) {
             fullTextBuilder.append("\n\n[보유 기술]\n").append(String.join(", ", cleanSkills));
         }
@@ -97,36 +98,30 @@ public class AiRecommendRequest {
 
         // 2. resume_content 구성
         Map<String, Object> contentMap = new HashMap<>();
-        contentMap.put("raw_text", finalRawText); 
-        contentMap.put("skills", cleanSkills);
-        
-        double totalYears = years + (months / 12.0);
-        contentMap.put("experience_years", Math.round(totalYears * 10) / 10.0);
-        
-        // (1) 학력 구조화 (깔끔하게 정리)
+        contentMap.put("raw_text", finalRawText);
+        Map<String, Object> skillsDict = new HashMap<>();
+        skillsDict.put("essential", new ArrayList<>(cleanSkills));
+        skillsDict.put("additional", new ArrayList<>());
+        contentMap.put("skills", skillsDict);
+
+        // (1) 학력 구조화
         List<Map<String, String>> pythonEdu = new ArrayList<>();
         for (String edu : cleanEducations) {
             Map<String, String> map = new HashMap<>();
-            map.put("school_name", edu); // 핵심 정보
-            map.put("major", "상세 내용 본문 참조"); // 억지 매핑 제거
-            map.put("degree", "상세 내용 본문 참조"); 
-            map.put("status", "졸업/수료");
+            map.put("school_name", edu);
+            map.put("major", edu); // 이력이 major에 없다면 임의로 값을 넣어줌
+            map.put("degree", "학사"); // 기본값 설정 (null보단 나음)
+            map.put("status", "졸업");
             pythonEdu.add(map);
         }
         contentMap.put("education", pythonEdu);
-        
+
         // (2) 경력 구조화
-        List<Map<String, String>> pythonCareer = new ArrayList<>();
-        for (String career : cleanCareers) {
-            Map<String, String> map = new HashMap<>();
-            map.put("company_name", career); // 핵심 정보
-            map.put("role", "상세 내용 본문 참조"); 
-            map.put("period", "기간 정보 본문 참조"); // 기간을 모르면 모른다고 명시
-            map.put("description", career); // 설명에는 원본 텍스트 포함
-            pythonCareer.add(map);
-        }
+        double totalYears = years + (months / 12.0);
+        double roundedTotalYears = Math.round(totalYears * 10) / 10.0;
+        List<Map<String, Object>> pythonCareer = extractCareerList(this.careers, roundedTotalYears);
         contentMap.put("professional_experience", pythonCareer);
-        
+
         // (3) 프로젝트 구조화
         List<Map<String, String>> pythonProject = new ArrayList<>();
         for (String p : cleanProjects) {
@@ -136,19 +131,21 @@ public class AiRecommendRequest {
             pythonProject.add(map);
         }
         contentMap.put("project_experience", pythonProject);
-
         result.put("resume_content", contentMap);
-        
+
         return result;
     }
-    
-    // 🛠️ [Object -> String] 추출 헬퍼
+
+    // 유틸 [Object -> String] 추출 함수
     private String extractString(Object input) {
         if (input == null) return null;
         if (input instanceof String) return (String) input;
         if (input instanceof Map) {
             Map<?, ?> map = (Map<?, ?>) input;
-            if (map.containsKey("content")) return String.valueOf(map.get("content"));
+            Object content = map.get("content");
+            if (content != null) {
+                return String.valueOf(content);
+            }
             List<String> values = new ArrayList<>();
             for (Object val : map.values()) {
                 if (val != null) values.add(val.toString());
@@ -158,7 +155,7 @@ public class AiRecommendRequest {
         return input.toString();
     }
 
-    // 🛠️ [Object -> List<String>] 만능 리스트 추출기
+    // 유틸 [Object -> List<String>] 만능 리스트 추출 함수
     private List<String> extractTextList(Object input) {
         List<String> result = new ArrayList<>();
         if (input == null) return result;
@@ -181,23 +178,24 @@ public class AiRecommendRequest {
             if (!s.isEmpty()) result.add(s);
         } else if (item instanceof Map) {
             Map<?, ?> map = (Map<?, ?>) item;
-            List<String> values = new ArrayList<>();
-            // 가능한 모든 키워드 탐색
-            String[] keysToCheck = {
-                "company", "companyName", "company_name", 
-                "school", "schoolName", "school_name", 
-                "project", "projectName", "project_title", 
-                "title", "name", "value", "role", "position", 
-                "period", "date", "description", "desc"
-            };
+            List<String> values = new ArrayList<>(); 
             
+            // 가능한 모든 키워드 검색
+            String[] keysToCheck = {
+                "company", "companyName", "company_name",
+                "school", "schoolName", "school_name",
+                "project", "projectName", "project_title",
+                "title", "name", "value", "role", "position", 
+                "period", "date", "description", "desc", "career", "careers"
+            };
+
             for (String key : keysToCheck) {
                 Object val = map.get(key);
                 if (val != null && !val.toString().trim().isEmpty()) {
                     values.add(val.toString().trim());
                 }
             }
-            
+
             if (values.isEmpty()) {
                 for (Object val : map.values()) {
                     if (val != null && !val.toString().trim().isEmpty()) {
@@ -205,7 +203,7 @@ public class AiRecommendRequest {
                     }
                 }
             }
-            
+
             if (!values.isEmpty()) {
                 result.add(String.join(" | ", values));
             }
@@ -213,14 +211,14 @@ public class AiRecommendRequest {
     }
 
     private void appendSection(StringBuilder builder, String title, List<String> items) {
-        if (!items.isEmpty()) {
+        if (items != null && !items.isEmpty()) {
             builder.append("\n\n").append(title).append("\n");
             for (String item : items) {
                 builder.append("- ").append(item).append("\n");
             }
         }
     }
-    
+
     private String convertJobCategoryToRole(String category) {
         if (category == null) return "Backend Developer";
         String lower = category.toLowerCase().trim();
@@ -229,5 +227,154 @@ public class AiRecommendRequest {
         if (lower.contains("front") || lower.contains("프론트")) return "Frontend Developer";
         if (lower.contains("full") || lower.contains("풀스택")) return "Fullstack Developer";
         return "Backend Developer";
+    }
+
+    // ---------------------------------------------------------
+    // 경력 정보 구조화 메서드
+    // ---------------------------------------------------------
+
+    /**
+     * 경력 정보를 구조화된 Map 리스트로 추출
+     */
+    private List<Map<String, Object>> extractCareerList(Object careers, double experienceYears) {
+        List<Map<String, Object>> result = new ArrayList<>();
+        if (careers == null) return result;
+
+        List<Object> careerItems = new ArrayList<>();
+        if (careers instanceof Iterable) {
+            for (Object item : (Iterable<?>) careers) {
+                careerItems.add(item);
+            }
+        } else {
+            careerItems.add(careers);
+        }
+
+        for (Object item : careerItems) {
+            Map<String, Object> careerMap = new HashMap<>();
+
+            if (item instanceof Map) {
+                Map<?, ?> map = (Map<?, ?>) item;
+                
+                // company_name 추출
+                String companyName = extractField(map, "company", "companyName", "company_name", "회사명");
+                if (companyName == null || companyName.isEmpty()) {
+                    // Map의 첫 번째 값 사용
+                    for (Object val : map.values()) {
+                        if (val != null && !val.toString().trim().isEmpty()) {
+                            companyName = val.toString().trim();
+                            break;
+                        }
+                    }
+                }
+                careerMap.put("company_name", companyName != null ? companyName : "Unknown");
+
+                // role 추출 (없으면 jobCategory 기반으로 생성)
+                String role = extractField(map, "role", "position", "직무", "position_name");
+                if (role == null || role.isEmpty()) {
+                    role = convertJobCategoryToRole(this.jobCategory);
+                }
+                careerMap.put("role", role);
+
+                // period 추출
+                String period = extractField(map, "period", "duration", "기간", "work_period", "근무기간");
+                careerMap.put("period", period != null ? period : null);
+
+                // key_tasks 추출
+                List<String> keyTasks = extractKeyTasks(map);
+                careerMap.put("key_tasks", keyTasks);
+
+                careerMap.put("experience_years", experienceYears);
+
+            } else if (item instanceof String) {
+                // String인 경우 fallback 처리
+                String careerStr = ((String) item).trim();
+                if (!careerStr.isEmpty()) {
+                    careerMap.put("company_name", careerStr);
+                    careerMap.put("role", convertJobCategoryToRole(this.jobCategory));
+                    careerMap.put("period", null);
+                    careerMap.put("key_tasks", new ArrayList<>());
+                    careerMap.put("experience_years", experienceYears);
+                }
+            }
+
+            if (!careerMap.isEmpty()) {
+                result.add(careerMap);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Map에서 여러 가능한 키 이름으로 필드 추출
+     */
+    private String extractField(Map<?, ?> map, String... keys) {
+        for (String key : keys) {
+            Object value = map.get(key);
+            if (value != null) {
+                String strValue = value.toString().trim();
+                if (!strValue.isEmpty()) {
+                    return strValue;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * key_tasks를 List<String>으로 추출
+     * List, String(쉼표/줄바꿈 구분), 또는 단일 값 모두 처리
+     */
+    private List<String> extractKeyTasks(Map<?, ?> map) {
+        List<String> result = new ArrayList<>();
+        
+        // 가능한 키 이름들
+        String[] keysToCheck = {"key_tasks", "tasks", "주요업무", "responsibilities", "담당업무", "description", "desc"};
+        
+        Object tasksValue = null;
+        for (String key : keysToCheck) {
+            tasksValue = map.get(key);
+            if (tasksValue != null) {
+                break;
+            }
+        }
+
+        if (tasksValue == null) {
+            return result;
+        }
+
+        // List인 경우
+        if (tasksValue instanceof Iterable) {
+            for (Object task : (Iterable<?>) tasksValue) {
+                if (task != null) {
+                    String taskStr = task.toString().trim();
+                    if (!taskStr.isEmpty()) {
+                        result.add(taskStr);
+                    }
+                }
+            }
+        } 
+        // String인 경우 - 쉼표, 줄바꿈, 또는 세미콜론으로 분리
+        else if (tasksValue instanceof String) {
+            String tasksStr = ((String) tasksValue).trim();
+            if (!tasksStr.isEmpty()) {
+                // 여러 구분자로 분리 시도
+                String[] parts = tasksStr.split("[,\n;]");
+                for (String part : parts) {
+                    String trimmed = part.trim();
+                    if (!trimmed.isEmpty()) {
+                        result.add(trimmed);
+                    }
+                }
+            }
+        }
+        // 기타 타입인 경우 toString() 사용
+        else {
+            String taskStr = tasksValue.toString().trim();
+            if (!taskStr.isEmpty()) {
+                result.add(taskStr);
+            }
+        }
+
+        return result;
     }
 }

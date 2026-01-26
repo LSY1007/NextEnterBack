@@ -1,6 +1,5 @@
 package org.zerock.nextenter.security.filter;
 
-
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -25,8 +24,8 @@ public class JWTCheckFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response,
-                                    FilterChain filterChain) throws ServletException, IOException {
+            HttpServletResponse response,
+            FilterChain filterChain) throws ServletException, IOException {
 
         String authHeader = request.getHeader("Authorization");
 
@@ -41,14 +40,21 @@ public class JWTCheckFilter extends OncePerRequestFilter {
             Map<String, Object> claims = jwtUtil.validateToken(token);
 
             String email = (String) claims.get("email");
-            String userType = (String) claims.get("userType");
 
-            UsernamePasswordAuthenticationToken authentication =
-                    new UsernamePasswordAuthenticationToken(
-                            email,
-                            null,
-                            List.of(new SimpleGrantedAuthority("ROLE_" + userType))
-                    );
+            // ✅ userType과 type 모두 확인 (호환성 유지)
+            String userType = (String) claims.get("userType");
+            if (userType == null) {
+                userType = (String) claims.get("type");
+            }
+
+            // ✅ 기본값 설정 (null 방지)
+            if (userType == null)
+                userType = "USER";
+
+            UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                    email,
+                    null,
+                    List.of(new SimpleGrantedAuthority("ROLE_" + userType)));
 
             SecurityContextHolder.getContext().setAuthentication(authentication);
             log.info("JWT 인증 성공: email={}", email);

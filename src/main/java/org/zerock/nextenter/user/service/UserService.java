@@ -212,8 +212,8 @@ public class UserService {
 
         // 파일명 생성
         String originalFilename = file.getOriginalFilename();
-        String extension = originalFilename != null ?
-                originalFilename.substring(originalFilename.lastIndexOf(".")) : ".jpg";
+        String extension = originalFilename != null ? originalFilename.substring(originalFilename.lastIndexOf("."))
+                : ".jpg";
         String filename = UUID.randomUUID().toString() + extension;
 
         // 파일 저장
@@ -236,8 +236,7 @@ public class UserService {
             String email,
             String name,
             String provider,
-            String providerId
-    ) {
+            String providerId) {
         return userRepository.findByEmail(email)
                 .map(user -> {
                     // 기존 회원 → OAuth 정보만 갱신
@@ -273,8 +272,7 @@ public class UserService {
                 user.getEmail(),
                 user.getName(),
                 "WITHDRAWAL",
-                "USER"
-        );
+                "USER");
 
         log.info("회원탈퇴 인증코드 발송: userId={}, email={}", userId, user.getEmail());
     }
@@ -291,8 +289,7 @@ public class UserService {
         boolean isValid = verificationCodeService.verifyCode(
                 user.getEmail(),
                 verificationCode,
-                "WITHDRAWAL"
-        );
+                "WITHDRAWAL");
 
         if (!isValid) {
             throw new IllegalArgumentException("인증코드가 유효하지 않거나 만료되었습니다.");
@@ -303,6 +300,7 @@ public class UserService {
 
         log.info("회원탈퇴 완료: userId={}, email={}", userId, user.getEmail());
     }
+
     /**
      * 비밀번호 변경 인증코드 발송
      */
@@ -321,8 +319,7 @@ public class UserService {
                 user.getEmail(),
                 user.getName(),
                 "PASSWORD_CHANGE",
-                "USER"
-        );
+                "USER");
 
         log.info("비밀번호 변경 인증코드 발송: email={}", email);
     }
@@ -344,8 +341,7 @@ public class UserService {
         boolean isValid = verificationCodeService.verifyCode(
                 email,
                 verificationCode,
-                "PASSWORD_CHANGE"
-        );
+                "PASSWORD_CHANGE");
 
         if (!isValid) {
             throw new IllegalArgumentException("인증코드가 유효하지 않거나 만료되었습니다.");

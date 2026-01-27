@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface JobPostingRepository extends JpaRepository<JobPosting, Long> {
+public interface JobPostingRepository extends JpaRepository<JobPosting, Long>, JobPostingRepositoryCustom {
 
     // 전체 목록 조회 (페이징)
     Page<JobPosting> findByStatusOrderByCreatedAtDesc(

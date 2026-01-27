@@ -71,10 +71,10 @@ public class JobPostingService {
                 }
             }
             
-            // 필터 조건이 있으면 동적 검색 사용
-            jobPage = jobPostingRepository.searchByFilters(
-                    jobCategories, categoryList,
-                    regions, regionList,
+            // 필터 조건이 있으면 동적 검색 사용 (지역 LIKE 검색 포함)
+            jobPage = jobPostingRepository.searchByFiltersWithRegionLike(
+                    categoryList,
+                    regionList,
                     keyword,
                     statusEnum,
                     pageable);
@@ -119,6 +119,8 @@ public class JobPostingService {
                 .location(request.getLocation())
                 .locationCity(request.getLocationCity()) // 시/도 정보 추가
                 .description(request.getDescription())
+                .thumbnailUrl(request.getThumbnailUrl()) // 썸네일 URL 추가
+                .detailImageUrl(request.getDetailImageUrl()) // 상세 이미지 URL 추가
                 .deadline(request.getDeadline())
                 .status(request.getStatus() != null && !request.getStatus().isEmpty() ?
                         JobPosting.Status.valueOf(request.getStatus().toUpperCase()) : JobPosting.Status.ACTIVE)
@@ -176,6 +178,12 @@ public class JobPostingService {
         }
         if (request.getDescription() != null) {
             jobPosting.setDescription(request.getDescription());
+        }
+        if (request.getThumbnailUrl() != null) {
+            jobPosting.setThumbnailUrl(request.getThumbnailUrl());
+        }
+        if (request.getDetailImageUrl() != null) {
+            jobPosting.setDetailImageUrl(request.getDetailImageUrl());
         }
         if (request.getDeadline() != null) {
             jobPosting.setDeadline(request.getDeadline());
@@ -266,6 +274,7 @@ public class JobPostingService {
                 .title(jobPosting.getTitle())
                 .companyName(companyName)
                 .logoUrl(logoUrl)
+                .thumbnailUrl(jobPosting.getThumbnailUrl()) // 썸네일 URL 추가
                 .jobCategory(jobPosting.getJobCategory())
                 .location(jobPosting.getLocation())
                 .locationCity(jobPosting.getLocationCity()) // 시/도 정보 추가
@@ -320,6 +329,8 @@ public class JobPostingService {
                 .location(jobPosting.getLocation())
                 .locationCity(jobPosting.getLocationCity()) // 시/도 정보 추가
                 .description(jobPosting.getDescription())
+                .thumbnailUrl(jobPosting.getThumbnailUrl()) // 썸네일 URL 추가
+                .detailImageUrl(jobPosting.getDetailImageUrl()) // 상세 이미지 URL 추가
                 .deadline(jobPosting.getDeadline())
                 .status(jobPosting.getStatus().name())
                 .viewCount(jobPosting.getViewCount())

@@ -98,7 +98,7 @@ public class CompanyService {
         claims.put("businessNumber", company.getBusinessNumber());
         claims.put("type", "COMPANY");
 
-        String token = JWTUtil.generateToken(claims, 180);
+        String token = JWTUtil.generateToken(claims, 1440); // 24시간
 
         log.info("기업 로그인 완료: email={}, companyName={}", company.getEmail(), company.getCompanyName());
 

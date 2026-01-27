@@ -31,6 +31,7 @@ public class ApplyListResponse {
 
     // 지원 정보
     private String status;
+    private String interviewStatus;
     private Integer aiScore;
 
     private LocalDateTime appliedAt;

@@ -116,6 +116,47 @@ public class ApplyController {
         return ResponseEntity.ok(apply);
     }
 
+    @Operation(summary = "면접 상태 변경", description = "지원자의 면접 상태를 변경합니다")
+    @PutMapping("/{applyId}/interview-status")
+    public ResponseEntity<ApplyResponse> updateInterviewStatus(
+            @Parameter(description = "지원 ID", required = true)
+            @PathVariable Long applyId,
+
+            @Parameter(description = "기업 ID", required = true)
+            @RequestHeader("companyId") Long companyId,
+
+            @Parameter(description = "면접 상태 (REQUESTED, ACCEPTED, REJECTED)", required = true)
+            @RequestBody String interviewStatus
+    ) {
+        log.info("PUT /api/applies/{}/interview-status - companyId: {}, interviewStatus: {}",
+                applyId, companyId, interviewStatus);
+
+        ApplyResponse apply =
+                applyService.updateInterviewStatus(applyId, companyId, interviewStatus);
+
+        return ResponseEntity.ok(apply);
+    }
+
+    @Operation(summary = "인재검색에서 면접 요청", description = "기업이 인재검색에서 면접을 요청합니다")
+    @PostMapping("/interview-request")
+    public ResponseEntity<ApplyResponse> createInterviewRequest(
+            @Parameter(description = "기업 ID", required = true)
+            @RequestHeader("companyId") Long companyId,
+
+            @Parameter(description = "사용자 ID", required = true)
+            @RequestParam Long userId,
+
+            @Parameter(description = "공고 ID", required = true)
+            @RequestParam Long jobId
+    ) {
+        log.info("POST /api/applies/interview-request - companyId: {}, userId: {}, jobId: {}",
+                companyId, userId, jobId);
+
+        ApplyResponse apply = applyService.createInterviewRequest(companyId, userId, jobId);
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(apply);
+    }
+
     @Operation(summary = "내 지원 내역 조회", description = "개인회원이 자신이 지원한 공고 목록을 조회합니다")
     @GetMapping("/my-applications")
     public ResponseEntity<Page<ApplyListResponse>> getMyApplications(

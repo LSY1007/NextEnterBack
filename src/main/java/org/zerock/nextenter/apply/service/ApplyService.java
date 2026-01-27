@@ -38,6 +38,64 @@ public class ApplyService {
     private final org.zerock.nextenter.notification.NotificationService notificationService;
 
     /**
+     * 인재검색에서 면접 요청 (기업회원용)
+     */
+    @Transactional
+    public ApplyResponse createInterviewRequest(Long companyId, Long userId, Long jobId) {
+        log.info("면접 요청 등록 - companyId: {}, userId: {}, jobId: {}",
+                companyId, userId, jobId);
+
+        // 중복 확인
+        boolean alreadyApplied = applyRepository.existsByUserIdAndJobId(userId, jobId);
+        if (alreadyApplied) {
+            throw new IllegalStateException("이미 면접 요청한 지원자입니다");
+        }
+
+        // 공고 유효성 검증
+        JobPosting job = jobPostingRepository.findById(jobId)
+                .orElseThrow(() -> new IllegalArgumentException("공고를 찾을 수 없습니다"));
+
+        if (!job.getCompanyId().equals(companyId)) {
+            throw new IllegalArgumentException("해당 공고의 기업이 아닙니다");
+        }
+
+        // 면접 요청 생성
+        Apply apply = Apply.builder()
+                .userId(userId)
+                .jobId(jobId)
+                .status(Apply.Status.PENDING)
+                .interviewStatus("REQUESTED")
+                .build();
+
+        apply = applyRepository.save(apply);
+        
+        // 지원자에게 면접 요청 알림 전송
+        try {
+            User companyUser = userRepository.findById(companyId).orElse(null);
+            String companyName = companyUser != null && companyUser.getName() != null
+                ? companyUser.getName() : "기업";
+            
+            log.info("알림 전송 시도 - userId: {}, companyName: {}, jobTitle: {}",
+                userId, companyName, job.getTitle());
+            
+            notificationService.notifyApplicationStatus(
+                userId,
+                companyName,
+                "면접 요청",
+                apply.getApplyId()
+            );
+            
+            log.info("면접 요청 알림 전송 성공!");
+        } catch (Exception e) {
+            log.error("면접 요청 알림 전송 실패", e);
+        }
+        
+        log.info("면접 요청 완료 - applyId: {}", apply.getApplyId());
+
+        return convertToDetailResponse(apply);
+    }
+
+    /**
      * 지원하기 (개인회원용)
      */
     @Transactional
@@ -228,7 +286,65 @@ public class ApplyService {
         return convertToDetailResponse(apply);
     }
 
+    /**
+     * 면접 상태 변경
+     */
+    @Transactional
+    public ApplyResponse updateInterviewStatus(
+            Long applyId, Long companyId, String interviewStatus) {
+
+        log.info("면접 상태 변경 - applyId: {}, interviewStatus: {}", applyId, interviewStatus);
+
+        Apply apply = applyRepository.findByIdAndCompanyId(applyId, companyId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "지원 내역을 찾을 수 없거나 접근 권한이 없습니다"));
+
+        // 면접 상태 변경
+        apply.setInterviewStatus(interviewStatus);
+        apply.setUpdatedAt(LocalDateTime.now());
+
+        applyRepository.save(apply);
+        
+        // 지원자에게 면접 상태 변경 알림 전송
+        try {
+            JobPosting job = jobPostingRepository.findById(apply.getJobId()).orElse(null);
+            if (job != null) {
+                User companyUser = userRepository.findById(job.getCompanyId()).orElse(null);
+                String companyName = companyUser != null && companyUser.getName() != null
+                    ? companyUser.getName() : job.getTitle();
+                
+                String statusText = getInterviewStatusText(interviewStatus);
+                
+                log.info("알림 전송 시도 - userId: {}, companyName: {}, interviewStatus: {}",
+                    apply.getUserId(), companyName, statusText);
+                
+                notificationService.notifyApplicationStatus(
+                    apply.getUserId(),
+                    companyName,
+                    statusText,
+                    apply.getApplyId()
+                );
+                
+                log.info("면접 상태 변경 알림 전송 성공!");
+            }
+        } catch (Exception e) {
+            log.error("면접 상태 변경 알림 전송 실패", e);
+        }
+
+        return convertToDetailResponse(apply);
+    }
+
     // Private helper methods
+    
+    private String getInterviewStatusText(String interviewStatus) {
+        if (interviewStatus == null) return "면접 대기";
+        switch (interviewStatus) {
+            case "REQUESTED": return "면접 요청";
+            case "ACCEPTED": return "면접 수락";
+            case "REJECTED": return "면접 거절";
+            default: return interviewStatus;
+        }
+    }
     
     private String getStatusText(Apply.Status status) {
         switch (status) {
@@ -311,6 +427,8 @@ public class ApplyService {
                 .status(apply.getStatus().name())
                 .aiScore(apply.getAiScore())
                 .appliedAt(apply.getAppliedAt())
+                // 기업 회원 면접 요청 여부 확인 - 지원자 목록에서
+                .interviewStatus(apply.getInterviewStatus())
                 .build();
     }
 

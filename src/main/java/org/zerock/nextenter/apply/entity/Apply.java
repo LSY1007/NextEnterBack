@@ -50,6 +50,9 @@ public class Apply {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    @Column(name = "interview_status", length = 20)
+    private String interviewStatus; // REQUESTED, ACCEPTED, REJECTED
+
     public enum Status {
         PENDING,   // 검토중
         REVIEWING, // 서류 검토중

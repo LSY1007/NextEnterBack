@@ -31,10 +31,36 @@ public class Resume {
     @Column(name = "file_type", length = 20)
     private String fileType;
 
+    // ===== 분리된 섹션 컬럼들 (JSON 타입) =====
+
+    // 경험/활동/교육
+    @Column(columnDefinition = "JSON")
+    private String experiences;
+    // 예: [{"title":"자격증명","period":"2020.01 - 2021.01"}]
+
+    // 자격증/어학/수상
+    @Column(columnDefinition = "JSON")
+    private String certificates;
+    // 예: [{"title":"TOEIC 900","date":"2020.01"}]
+
+    // 학력
+    @Column(columnDefinition = "JSON")
+    private String educations;
+    // 예: [{"school":"서울대학교","major":"컴퓨터공학","period":"2015 ~ 2019"}]
+
+    // 경력
+    @Column(columnDefinition = "JSON")
+    private String careers;
+    // 예: [{"company":"네이버","position":"선임연구원","role":"백엔드 개발","period":"2019.01 ~ 2023.01"}]
+
+    // ===== 기존 필드들 =====
+
     // AI 처리 결과 (LONGTEXT) - 나중에 AI 서버 연동 시 사용
     @Column(name = "extracted_text", columnDefinition = "LONGTEXT")
     private String extractedText;
 
+    // 기존 structuredData - 점진적 제거를 위해 유지
+    @Deprecated
     @Column(name = "structured_data", columnDefinition = "LONGTEXT")
     private String structuredData;
 
@@ -53,7 +79,7 @@ public class Resume {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     @Builder.Default
-    private Visibility visibility = Visibility.PUBLIC;  // ✅ 기본값 PUBLIC으로 변경
+    private Visibility visibility = Visibility.PUBLIC;
 
     @Column(name = "view_count", nullable = false)
     @Builder.Default
@@ -95,7 +121,7 @@ public class Resume {
             this.isMain = false;
         }
         if (this.visibility == null) {
-            this.visibility = Visibility.PUBLIC;  // ✅ 기본값 PUBLIC
+            this.visibility = Visibility.PUBLIC;
         }
     }
 

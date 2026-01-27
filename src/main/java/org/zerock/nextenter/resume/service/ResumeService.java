@@ -2,28 +2,35 @@ package org.zerock.nextenter.resume.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import org.zerock.nextenter.coverletter.entity.CoverLetter;
+import org.zerock.nextenter.coverletter.repository.CoverLetterRepository;
 import org.zerock.nextenter.resume.dto.ResumeListResponse;
 import org.zerock.nextenter.resume.dto.ResumeRequest;
 import org.zerock.nextenter.resume.dto.ResumeResponse;
 import org.zerock.nextenter.resume.dto.TalentSearchResponse;
+import org.zerock.nextenter.resume.entity.Portfolio;
 import org.zerock.nextenter.resume.entity.Resume;
 import org.zerock.nextenter.resume.entity.TalentContact;
+import org.zerock.nextenter.resume.repository.PortfolioRepository;
 import org.zerock.nextenter.resume.repository.ResumeRepository;
 import org.zerock.nextenter.resume.repository.TalentContactRepository;
 import org.zerock.nextenter.user.entity.User;
 import org.zerock.nextenter.user.repository.UserRepository;
 
-import java.time.LocalDateTime;
-import java.time.Period;
-import java.time.format.DateTimeFormatter;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -38,6 +45,8 @@ public class ResumeService {
     private final FileStorageService fileStorageService;
     private final UserRepository userRepository;
     private final TalentContactRepository talentContactRepository;
+    private final PortfolioRepository portfolioRepository;  // ✅ 추가
+    private final CoverLetterRepository coverLetterRepository;  // ✅ 추가
     private final ObjectMapper objectMapper = new ObjectMapper(); // JSON 파싱용
 
     // 이력서 목록 조회
@@ -61,6 +70,16 @@ public class ResumeService {
                 .findByResumeIdAndUserIdAndDeletedAtIsNull(resumeId, userId)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "이력서를 찾을 수 없거나 접근 권한이 없습니다"));
+
+        // ✅ structuredData에 포트폴리오 및 자기소개서 ID 추가
+        try {
+            updateStructuredDataWithIds(resumeId, userId);
+            // resume 객체 다시 조회 (업데이트된 structuredData 반영)
+            resume = resumeRepository.findByResumeIdAndUserIdAndDeletedAtIsNull(resumeId, userId)
+                    .orElseThrow(() -> new IllegalArgumentException("이력서를 찾을 수 없습니다"));
+        } catch (Exception e) {
+            log.warn("structuredData ID 업데이트 실패 (무시하고 계속): {}", e.getMessage());
+        }
 
         // 조회수 증가
         resumeRepository.incrementViewCount(resumeId);
@@ -537,5 +556,342 @@ public class ResumeService {
         }
 
         return "협의";
+    }
+
+    /**
+     * 이력서 파일 다운로드
+     */
+    public Resource downloadResumeFile(Long resumeId, Long userId) {
+        Resume resume = resumeRepository.findByResumeIdAndUserIdAndDeletedAtIsNull(resumeId, userId)
+                .orElseThrow(() -> new IllegalArgumentException("이력서를 찾을 수 없습니다"));
+
+        if (resume.getFilePath() == null || resume.getFilePath().isEmpty()) {
+            throw new IllegalArgumentException("다운로드할 파일이 없습니다");
+        }
+
+        try {
+            Path filePath = Paths.get(resume.getFilePath());
+            Resource resource = new UrlResource(filePath.toUri());
+
+            if (resource.exists() && resource.isReadable()) {
+                return resource;
+            } else {
+                throw new IllegalArgumentException("파일을 읽을 수 없습니다");
+            }
+        } catch (Exception e) {
+            log.error("이력서 파일 다운로드 실패: {}", e.getMessage(), e);
+            throw new RuntimeException("파일 다운로드에 실패했습니다", e);
+        }
+    }
+
+    /**
+     * structuredData에 포트폴리오 및 자기소개서 ID 업데이트
+     */
+    @Transactional
+    public void updateStructuredDataWithIds(Long resumeId, Long userId) {
+        log.info("=== structuredData ID 업데이트 시작 - resumeId: {}, userId: {} ===", resumeId, userId);
+
+        Resume resume = resumeRepository.findByResumeIdAndUserIdAndDeletedAtIsNull(resumeId, userId)
+                .orElseThrow(() -> new IllegalArgumentException("이력서를 찾을 수 없습니다"));
+
+        if (resume.getStructuredData() == null || resume.getStructuredData().isEmpty()) {
+            log.warn("structuredData가 비어있음 - resumeId: {}", resumeId);
+            return;
+        }
+
+        try {
+            log.info("기존 structuredData: {}", resume.getStructuredData());
+
+            JsonNode root = objectMapper.readTree(resume.getStructuredData());
+            ObjectNode rootNode = (ObjectNode) root;
+            boolean updated = false;
+
+            // 포트폴리오 ID 추가
+            List<Portfolio> portfolios = portfolioRepository.findByResumeIdOrderByDisplayOrder(resumeId);
+            log.info("조회된 포트폴리오 개수: {}", portfolios != null ? portfolios.size() : 0);
+
+            if (portfolios != null && !portfolios.isEmpty()) {
+                ArrayNode portfoliosArray = objectMapper.createArrayNode();
+
+                for (Portfolio portfolio : portfolios) {
+                    log.info("포트폴리오 추가 - ID: {}, 파일명: {}", portfolio.getPortfolioId(), portfolio.getFileName());
+
+                    ObjectNode portfolioNode = objectMapper.createObjectNode();
+                    portfolioNode.put("portfolioId", portfolio.getPortfolioId());
+                    portfolioNode.put("filename", portfolio.getFileName());
+                    portfolioNode.put("fileType", portfolio.getFileType());
+                    if (portfolio.getDescription() != null) {
+                        portfolioNode.put("description", portfolio.getDescription());
+                    }
+                    portfoliosArray.add(portfolioNode);
+                }
+
+                rootNode.set("portfolios", portfoliosArray);
+                updated = true;
+                log.info("포트폴리오 배열 업데이트 완료");
+            }
+
+            // 자기소개서 ID 추가
+            List<CoverLetter> coverLetters = coverLetterRepository.findByUserIdOrderByCreatedAtDesc(userId);
+            log.info("조회된 자기소개서 개수: {}", coverLetters != null ? coverLetters.size() : 0);
+
+            if (coverLetters != null && !coverLetters.isEmpty()) {
+                ObjectNode coverLetterNode;
+
+                if (rootNode.has("coverLetter")) {
+                    coverLetterNode = (ObjectNode) rootNode.get("coverLetter");
+                    log.info("기존 coverLetter 노드 사용");
+                } else {
+                    coverLetterNode = objectMapper.createObjectNode();
+                    log.info("새 coverLetter 노드 생성");
+                }
+
+                ArrayNode filesArray = objectMapper.createArrayNode();
+                for (CoverLetter coverLetter : coverLetters) {
+                    if (coverLetter.getFilePath() != null) {
+                        log.info("자기소개서 파일 추가 - ID: {}, 제목: {}", coverLetter.getCoverLetterId(), coverLetter.getTitle());
+
+                        ObjectNode fileNode = objectMapper.createObjectNode();
+                        fileNode.put("coverLetterId", coverLetter.getCoverLetterId());
+                        String filename = coverLetter.getTitle() +
+                                (coverLetter.getFileType() != null ? "." + coverLetter.getFileType() : "");
+                        fileNode.put("filename", filename);
+                        filesArray.add(fileNode);
+                    }
+                }
+
+                if (filesArray.size() > 0) {
+                    coverLetterNode.set("files", filesArray);
+                    rootNode.set("coverLetter", coverLetterNode);
+                    updated = true;
+                    log.info("자기소개서 파일 배열 업데이트 완료");
+                }
+            }
+
+            if (updated) {
+                // 업데이트된 structuredData 저장
+                String updatedData = objectMapper.writeValueAsString(rootNode);
+                log.info("업데이트된 structuredData: {}", updatedData);
+
+                resume.setStructuredData(updatedData);
+                resumeRepository.save(resume);
+
+                log.info("✅ structuredData 업데이트 완료 - resumeId: {}", resumeId);
+            } else {
+                log.info("업데이트할 포트폴리오/자기소개서 없음");
+            }
+
+        } catch (Exception e) {
+            log.error("❌ structuredData 업데이트 실패", e);
+            throw new RuntimeException("structuredData 업데이트에 실패했습니다", e);
+        }
+    }
+    /**
+     * 파일 포함 이력서 생성
+     */
+    @Transactional
+    public ResumeResponse createResumeWithFiles(
+            ResumeRequest request,
+            Long userId,
+            List<MultipartFile> portfolioFiles,
+            List<MultipartFile> coverLetterFiles) {
+
+        log.info("파일 포함 이력서 생성 - userId: {}, title: {}", userId, request.getTitle());
+
+        // 1. 기본 이력서 생성
+        Resume.Visibility visibility = Resume.Visibility.PUBLIC;
+        if (request.getVisibility() != null) {
+            try {
+                visibility = Resume.Visibility.valueOf(request.getVisibility().toUpperCase());
+            } catch (IllegalArgumentException e) {
+                log.warn("잘못된 visibility 값: {}", request.getVisibility());
+            }
+        }
+
+        Resume resume = Resume.builder()
+                .userId(userId)
+                .title(request.getTitle())
+                .jobCategory(request.getJobCategory())
+                .structuredData(request.getSections())
+                .skills(request.getSkills())
+                .visibility(visibility)
+                .status(request.getStatus() != null ? request.getStatus() : "DRAFT")
+                .build();
+
+        resume = resumeRepository.save(resume);
+        log.info("이력서 생성 완료 - resumeId: {}", resume.getResumeId());
+
+        // 2. 포트폴리오 파일 저장
+        if (portfolioFiles != null && !portfolioFiles.isEmpty()) {
+            int displayOrder = 0;
+            for (MultipartFile file : portfolioFiles) {
+                try {
+                    // 파일 저장
+                    String filename = fileStorageService.saveFile(file);
+                    String filePath = fileStorageService.getFileUrl(filename);
+                    String fileType = getFileExtension(file.getOriginalFilename());
+
+                    // Portfolio 엔티티 생성
+                    Portfolio portfolio = Portfolio.builder()
+                            .resume(resume)
+                            .fileName(file.getOriginalFilename())
+                            .filePath(filePath)
+                            .fileType(fileType)
+                            .fileSize(file.getSize())
+                            .displayOrder(displayOrder++)
+                            .build();
+
+                    portfolioRepository.save(portfolio);
+                    log.info("포트폴리오 저장 완료 - portfolioId: {}, filename: {}",
+                            portfolio.getPortfolioId(), portfolio.getFileName());
+
+                } catch (Exception e) {
+                    log.error("포트폴리오 파일 저장 실패: {}", file.getOriginalFilename(), e);
+                }
+            }
+        }
+
+        // 3. 자기소개서 파일 저장
+        if (coverLetterFiles != null && !coverLetterFiles.isEmpty()) {
+            for (MultipartFile file : coverLetterFiles) {
+                try {
+                    // 파일 저장
+                    String filename = fileStorageService.saveFile(file);
+                    String filePath = fileStorageService.getFileUrl(filename);
+                    String fileType = getFileExtension(file.getOriginalFilename());
+
+                    // CoverLetter 엔티티 생성
+                    CoverLetter coverLetter = CoverLetter.builder()
+                            .userId(userId)
+                            .title(file.getOriginalFilename())
+                            .filePath(filePath)
+                            .fileType(fileType)
+                            .build();
+
+                    coverLetterRepository.save(coverLetter);
+                    log.info("자기소개서 저장 완료 - coverLetterId: {}, filename: {}",
+                            coverLetter.getCoverLetterId(), coverLetter.getTitle());
+
+                } catch (Exception e) {
+                    log.error("자기소개서 파일 저장 실패: {}", file.getOriginalFilename(), e);
+                }
+            }
+        }
+
+        // 4. structuredData에 ID 추가
+        updateStructuredDataWithIds(resume.getResumeId(), userId);
+
+        // 5. 업데이트된 이력서 다시 조회
+        resume = resumeRepository.findById(resume.getResumeId())
+                .orElseThrow(() -> new IllegalArgumentException("이력서를 찾을 수 없습니다"));
+
+        return convertToResponse(resume);
+    }
+
+    /**
+     * 파일 포함 이력서 수정
+     */
+    @Transactional
+    public ResumeResponse updateResumeWithFiles(
+            Long resumeId,
+            ResumeRequest request,
+            Long userId,
+            List<MultipartFile> portfolioFiles,
+            List<MultipartFile> coverLetterFiles) {
+
+        log.info("파일 포함 이력서 수정 - resumeId: {}, userId: {}", resumeId, userId);
+
+        Resume resume = resumeRepository.findByResumeIdAndUserIdAndDeletedAtIsNull(resumeId, userId)
+                .orElseThrow(() -> new IllegalArgumentException("이력서를 찾을 수 없거나 접근 권한이 없습니다"));
+
+        // 1. 기본 정보 업데이트
+        if (request.getTitle() != null) {
+            resume.setTitle(request.getTitle());
+        }
+        if (request.getJobCategory() != null) {
+            resume.setJobCategory(request.getJobCategory());
+        }
+        if (request.getSections() != null) {
+            resume.setStructuredData(request.getSections());
+        }
+        if (request.getStatus() != null) {
+            resume.setStatus(request.getStatus());
+        }
+        if (request.getSkills() != null) {
+            resume.setSkills(request.getSkills());
+        }
+        if (request.getVisibility() != null) {
+            try {
+                Resume.Visibility visibility = Resume.Visibility.valueOf(request.getVisibility().toUpperCase());
+                resume.setVisibility(visibility);
+            } catch (IllegalArgumentException e) {
+                log.warn("잘못된 visibility 값: {}", request.getVisibility());
+            }
+        }
+
+        resume = resumeRepository.save(resume);
+
+        // 2. 새 포트폴리오 파일 추가 (기존 파일은 유지)
+        if (portfolioFiles != null && !portfolioFiles.isEmpty()) {
+            // 기존 포트폴리오 개수 확인
+            List<Portfolio> existingPortfolios = portfolioRepository.findByResumeIdOrderByDisplayOrder(resumeId);
+            int displayOrder = existingPortfolios.size();
+
+            for (MultipartFile file : portfolioFiles) {
+                try {
+                    String filename = fileStorageService.saveFile(file);
+                    String filePath = fileStorageService.getFileUrl(filename);
+                    String fileType = getFileExtension(file.getOriginalFilename());
+
+                    Portfolio portfolio = Portfolio.builder()
+                            .resume(resume)
+                            .fileName(file.getOriginalFilename())
+                            .filePath(filePath)
+                            .fileType(fileType)
+                            .fileSize(file.getSize())
+                            .displayOrder(displayOrder++)
+                            .build();
+
+                    portfolioRepository.save(portfolio);
+                    log.info("포트폴리오 추가 완료 - portfolioId: {}", portfolio.getPortfolioId());
+
+                } catch (Exception e) {
+                    log.error("포트폴리오 파일 저장 실패: {}", file.getOriginalFilename(), e);
+                }
+            }
+        }
+
+        // 3. 새 자기소개서 파일 추가 (기존 파일은 유지)
+        if (coverLetterFiles != null && !coverLetterFiles.isEmpty()) {
+            for (MultipartFile file : coverLetterFiles) {
+                try {
+                    String filename = fileStorageService.saveFile(file);
+                    String filePath = fileStorageService.getFileUrl(filename);
+                    String fileType = getFileExtension(file.getOriginalFilename());
+
+                    CoverLetter coverLetter = CoverLetter.builder()
+                            .userId(userId)
+                            .title(file.getOriginalFilename())
+                            .filePath(filePath)
+                            .fileType(fileType)
+                            .build();
+
+                    coverLetterRepository.save(coverLetter);
+                    log.info("자기소개서 추가 완료 - coverLetterId: {}", coverLetter.getCoverLetterId());
+
+                } catch (Exception e) {
+                    log.error("자기소개서 파일 저장 실패: {}", file.getOriginalFilename(), e);
+                }
+            }
+        }
+
+        // 4. structuredData에 ID 추가
+        updateStructuredDataWithIds(resumeId, userId);
+
+        // 5. 업데이트된 이력서 다시 조회
+        resume = resumeRepository.findById(resumeId)
+                .orElseThrow(() -> new IllegalArgumentException("이력서를 찾을 수 없습니다"));
+
+        return convertToResponse(resume);
     }
 }

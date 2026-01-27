@@ -71,6 +71,12 @@ public class User {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    @Column(name = "withdrawal_verification_code", length = 10)
+    private String withdrawalVerificationCode;
+
+    @Column(name = "withdrawal_code_expiry")
+    private LocalDateTime withdrawalCodeExpiry;
+
     public enum Gender {
         MALE, FEMALE, OTHER
     }

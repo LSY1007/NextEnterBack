@@ -149,6 +149,32 @@ public class ResumeController {
                 return ResponseEntity.ok(response);
         }
 
+    @Operation(summary = "이력서 파일 다운로드", description = "업로드된 이력서 파일을 다운로드합니다")
+    @GetMapping("/{id}/download")
+    public ResponseEntity<Resource> downloadResumeFile(
+            @Parameter(description = "이력서 ID", required = true, example = "1") @PathVariable Long id,
+            @Parameter(description = "사용자 ID", required = true, example = "1") @RequestHeader("userId") Long userId) {
+        log.info("GET /api/resume/{}/download - userId: {}", id, userId);
+
+        // 이력서 파일 다운로드
+        Resource resource = resumeService.downloadResumeFile(id, userId);
+
+        // 이력서 정보 조회 (파일명 가져오기)
+        ResumeResponse resume = resumeService.getResumeDetail(id, userId);
+        String fileName = resume.getTitle() + "." + resume.getFileType();
+
+        // 한글 파일명 인코딩
+        String encodedFileName = new String(
+                fileName.getBytes(StandardCharsets.UTF_8),
+                StandardCharsets.ISO_8859_1);
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + encodedFileName + "\"")
+                .body(resource);
+    }
+
         @Operation(summary = "스크랩한 인재 목록 조회", description = "기업 회원이 저장한 인재 목록을 조회합니다")
         @GetMapping("/saved")
         public ResponseEntity<Page<TalentSearchResponse>> getSavedTalents(
@@ -375,4 +401,45 @@ public class ResumeController {
                                                 "attachment; filename=\"" + encodedFileName + "\"")
                                 .body(resource);
         }
+
+    /**
+     * 파일 포함 이력서 생성
+     */
+    @PostMapping("/create-with-files")
+    public ResponseEntity<ResumeResponse> createResumeWithFiles(
+            @RequestPart("request") @Valid ResumeRequest request,
+            @RequestPart(value = "portfolioFiles", required = false) List<MultipartFile> portfolioFiles,
+            @RequestPart(value = "coverLetterFiles", required = false) List<MultipartFile> coverLetterFiles,
+            @RequestHeader("userId") Long userId) {
+
+        log.info("파일 포함 이력서 생성 요청 - userId: {}, title: {}", userId, request.getTitle());
+        log.info("포트폴리오 파일 개수: {}", portfolioFiles != null ? portfolioFiles.size() : 0);
+        log.info("자기소개서 파일 개수: {}", coverLetterFiles != null ? coverLetterFiles.size() : 0);
+
+        ResumeResponse response = resumeService.createResumeWithFiles(
+                request, userId, portfolioFiles, coverLetterFiles
+        );
+
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * 파일 포함 이력서 수정
+     */
+    @PutMapping("/{resumeId}/update-with-files")
+    public ResponseEntity<ResumeResponse> updateResumeWithFiles(
+            @PathVariable Long resumeId,
+            @RequestPart("request") @Valid ResumeRequest request,
+            @RequestPart(value = "portfolioFiles", required = false) List<MultipartFile> portfolioFiles,
+            @RequestPart(value = "coverLetterFiles", required = false) List<MultipartFile> coverLetterFiles,
+            @RequestHeader("userId") Long userId) {
+
+        log.info("파일 포함 이력서 수정 요청 - resumeId: {}, userId: {}", resumeId, userId);
+
+        ResumeResponse response = resumeService.updateResumeWithFiles(
+                resumeId, request, userId, portfolioFiles, coverLetterFiles
+        );
+
+        return ResponseEntity.ok(response);
+    }
 }

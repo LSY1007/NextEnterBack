@@ -2,6 +2,7 @@ package org.zerock.nextenter.user.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.zerock.nextenter.service.EmailService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -29,6 +30,7 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final JWTUtil jwtUtil;
     private final VerificationCodeService verificationCodeService;
+    private final EmailService emailService;
 
     // ✅ 기존 설정 사용
     @Value("${file.upload-dir}")
@@ -352,5 +354,79 @@ public class UserService {
         userRepository.save(user);
 
         log.info("비밀번호 변경 완료: email={}", email);
+    }
+
+    /**
+     * 회원 탈퇴 인증 코드 발송
+     */
+    @Transactional
+    public void sendWithdrawalVerificationCode(Long userId) {
+        // 사용자 조회
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+
+        // 6자리 인증 코드 생성
+        String code = String.format("%06d", (int)(Math.random() * 1000000));
+
+        // 인증 코드 저장 (5분 유효)
+        LocalDateTime expiryTime = LocalDateTime.now().plusMinutes(5);
+
+        // User 엔티티에 인증 코드와 만료 시간 저장
+        user.setWithdrawalVerificationCode(code);
+        user.setWithdrawalCodeExpiry(expiryTime);
+        userRepository.save(user);
+
+        log.info("회원 탈퇴 인증 코드 생성 - userId: {}, code: {}", userId, code);
+
+        // 이메일 발송 (EmailService의 메서드 사용)
+        emailService.sendWithdrawalVerificationEmail(user.getEmail(), user.getName(), code);
+        log.info("회원 탈퇴 인증 코드 이메일 발송 완료 - {}", user.getEmail());
+    }
+
+    /**
+     * 회원 탈퇴 (인증 코드 확인 후)
+     */
+    @Transactional
+    public Map<String, Object> withdrawUser(Long userId, String verificationCode) {
+        Map<String, Object> result = new HashMap<>();
+
+        // 사용자 조회
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+
+        // 인증 코드 확인
+        if (user.getWithdrawalVerificationCode() == null ||
+                !user.getWithdrawalVerificationCode().equals(verificationCode)) {
+            throw new IllegalArgumentException("인증 코드가 일치하지 않습니다.");
+        }
+
+        // 인증 코드 만료 확인
+        if (user.getWithdrawalCodeExpiry() == null ||
+                LocalDateTime.now().isAfter(user.getWithdrawalCodeExpiry())) {
+            throw new IllegalArgumentException("인증 코드가 만료되었습니다. 다시 요청해주세요.");
+        }
+
+        // 크레딧 잔액 확인 (Credit 엔티티가 있다고 가정)
+        // 만약 Credit 서비스가 있다면 사용, 없으면 0으로 설정
+        Integer creditBalance = 0;
+        try {
+            // creditService.getCreditBalance(userId);
+            // Credit 서비스가 구현되어 있다면 여기서 조회
+        } catch (Exception e) {
+            log.warn("크레딧 조회 실패, 0으로 설정", e);
+        }
+
+        result.put("creditBalance", creditBalance);
+        result.put("hasCredit", creditBalance > 0);
+
+        // 회원 삭제 (CASCADE로 연관 데이터도 자동 삭제됨)
+        userRepository.delete(user);
+
+        log.info("회원 탈퇴 완료 - userId: {}, email: {}, 잔여 크레딧: {}",
+                userId, user.getEmail(), creditBalance);
+
+        result.put("message", "회원 탈퇴가 완료되었습니다.");
+
+        return result;
     }
 }

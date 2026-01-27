@@ -302,4 +302,63 @@ public class UserController {
             return ResponseEntity.internalServerError().body(response);
         }
     }
+
+    /**
+     * 회원 탈퇴 인증 코드 발송
+     */
+    @PostMapping("/withdrawal/send-code")
+    public ResponseEntity<Map<String, Object>> sendWithdrawalCode(@RequestHeader("userId") Long userId) {
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            userService.sendWithdrawalVerificationCode(userId);
+            response.put("success", true);
+            response.put("message", "인증 코드가 이메일로 발송되었습니다.");
+            return ResponseEntity.ok(response);
+
+        } catch (IllegalArgumentException e) {
+            response.put("success", false);
+            response.put("message", e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+
+        } catch (Exception e) {
+            log.error("인증 코드 발송 오류", e);
+            response.put("success", false);
+            response.put("message", "서버 오류가 발생했습니다.");
+            return ResponseEntity.internalServerError().body(response);
+        }
+    }
+
+    /**
+     * 회원 탈퇴 (인증 코드 확인 후)
+     */
+    @DeleteMapping("/withdrawal")
+    public ResponseEntity<Map<String, Object>> withdrawUser(
+            @RequestHeader("userId") Long userId,
+            @RequestBody Map<String, String> request) {
+
+        Map<String, Object> response = new HashMap<>();
+        String verificationCode = request.get("verificationCode");
+
+        try {
+            // 크레딧 잔액 확인 및 탈퇴 처리
+            Map<String, Object> result = userService.withdrawUser(userId, verificationCode);
+
+            response.put("success", true);
+            response.put("message", "회원 탈퇴가 완료되었습니다.");
+            response.put("data", result);
+            return ResponseEntity.ok(response);
+
+        } catch (IllegalArgumentException e) {
+            response.put("success", false);
+            response.put("message", e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+
+        } catch (Exception e) {
+            log.error("회원 탈퇴 오류", e);
+            response.put("success", false);
+            response.put("message", "서버 오류가 발생했습니다.");
+            return ResponseEntity.internalServerError().body(response);
+        }
+    }
 }

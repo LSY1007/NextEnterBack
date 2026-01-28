@@ -35,4 +35,11 @@ public class SignupRequest {
     // ✅ 성별 추가 (선택 입력)
     @Schema(description = "성별", example = "MALE", allowableValues = {"MALE", "FEMALE"})
     private String gender;
+
+    // ✅ 주소 추가 (선택 입력)
+    @Schema(description = "주소", example = "서울특별시 강남구 테헤란로 123")
+    private String address;
+
+    @Schema(description = "상세주소", example = "3층")
+    private String detailAddress;
 }

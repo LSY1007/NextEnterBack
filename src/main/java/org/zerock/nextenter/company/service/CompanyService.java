@@ -52,6 +52,7 @@ public class CompanyService {
                 .industry(request.getIndustry())
                 .employeeCount(request.getEmployeeCount())
                 .address(request.getAddress())
+                .detailAddress(request.getDetailAddress())  // ✅ 상세주소 추가
                 .logoUrl(request.getLogoUrl())
                 .website(request.getWebsite())
                 .description(request.getDescription())

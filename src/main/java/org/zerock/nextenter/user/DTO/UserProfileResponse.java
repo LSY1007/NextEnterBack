@@ -20,6 +20,8 @@ public class UserProfileResponse {
     private String gender;
     private String profileImage;
     private String bio;
+    private String address;  // ✅ 주소 추가
+    private String detailAddress;  // ✅ 상세주소 추가
     private String provider;
     private LocalDateTime createdAt;
 }

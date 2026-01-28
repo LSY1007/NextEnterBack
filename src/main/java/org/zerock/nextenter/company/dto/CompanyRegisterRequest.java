@@ -30,6 +30,7 @@ public class CompanyRegisterRequest {
     private String industry;
     private Integer employeeCount;
     private String address;
+    private String detailAddress;  // ✅ 상세주소 추가
     private String logoUrl;
     private String website;
     private String description;

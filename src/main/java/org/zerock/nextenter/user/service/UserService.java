@@ -61,6 +61,8 @@ public class UserService {
                 .phone(request.getPhone())
                 .age(request.getAge())
                 .gender(gender)
+                .address(request.getAddress())  // ✅ 주소 추가
+                .detailAddress(request.getDetailAddress())  // ✅ 상세주소 추가
                 .isActive(true)
                 .build();
 
@@ -129,6 +131,8 @@ public class UserService {
                 .gender(user.getGender() != null ? user.getGender().name() : null)
                 .profileImage(user.getProfileImage())
                 .bio(user.getBio())
+                .address(user.getAddress())  // ✅ 주소 추가
+                .detailAddress(user.getDetailAddress())  // ✅ 상세주소 추가
                 .provider(user.getProvider())
                 .createdAt(user.getCreatedAt())
                 .build();
@@ -164,6 +168,15 @@ public class UserService {
             user.setBio(request.getBio().trim().isEmpty() ? null : request.getBio());
         }
 
+        // ✅ 주소 업데이트
+        if (request.getAddress() != null) {
+            user.setAddress(request.getAddress().trim().isEmpty() ? null : request.getAddress());
+        }
+
+        if (request.getDetailAddress() != null) {
+            user.setDetailAddress(request.getDetailAddress().trim().isEmpty() ? null : request.getDetailAddress());
+        }
+
         User updatedUser = userRepository.save(user);
 
         return UserProfileResponse.builder()
@@ -175,6 +188,8 @@ public class UserService {
                 .gender(updatedUser.getGender() != null ? updatedUser.getGender().name() : null)
                 .profileImage(updatedUser.getProfileImage())
                 .bio(updatedUser.getBio())
+                .address(updatedUser.getAddress())  // ✅ 주소 추가
+                .detailAddress(updatedUser.getDetailAddress())  // ✅ 상세주소 추가
                 .provider(updatedUser.getProvider())
                 .createdAt(updatedUser.getCreatedAt())
                 .build();

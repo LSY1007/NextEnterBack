@@ -190,6 +190,20 @@ public class InterviewOfferService {
     }
 
     /**
+     * 특정 인재에게 제안한 공고 ID 목록
+     */
+    public List<Long> getOfferedJobIds(Long companyId, Long userId) {
+        log.info("제안한 공고 ID 목록 - companyId: {}, userId: {}", companyId, userId);
+
+        List<InterviewOffer> offers = interviewOfferRepository.findByCompanyIdAndUserId(companyId, userId);
+
+        return offers.stream()
+                .map(InterviewOffer::getJobId)
+                .distinct()
+                .collect(Collectors.toList());
+    }
+
+    /**
      * DTO 변환
      */
     private InterviewOfferResponse convertToResponse(InterviewOffer offer) {

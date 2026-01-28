@@ -53,4 +53,9 @@ public interface InterviewOfferRepository extends JpaRepository<InterviewOffer, 
      * Apply와 연결된 면접 제안 조회
      */
     Optional<InterviewOffer> findByApplyId(Long applyId);
+
+    /**
+     * 특정 기업이 특정 인재에게 보낸 모든 면접 제안
+     */
+    List<InterviewOffer> findByCompanyIdAndUserId(Long companyId, Long userId);
 }

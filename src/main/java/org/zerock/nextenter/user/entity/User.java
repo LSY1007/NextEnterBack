@@ -51,6 +51,13 @@ public class User {
     @Column(columnDefinition = "TEXT")
     private String bio;
 
+    // ✅ 주소 관련 필드
+    @Column(length = 255)
+    private String address;
+
+    @Column(name = "detail_address", length = 255)
+    private String detailAddress;
+
     // ✅ 소셜 로그인 관련 필드 - provider가 null이면 일반 회원
     @Column(length = 20)
     private String provider; // NAVER, KAKAO, null(일반회원)

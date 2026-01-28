@@ -24,4 +24,10 @@ public class UpdateProfileRequest {
 
     @Schema(description = "자기소개", example = "안녕하세요. 저는...")
     private String bio;
+
+    @Schema(description = "주소", example = "서울특별시 강남구 테헤란로 123")
+    private String address;
+
+    @Schema(description = "상세주소", example = "3층")
+    private String detailAddress;
 }

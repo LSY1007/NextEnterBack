@@ -83,6 +83,6 @@ tasks.withType(JavaCompile).configureEach {
 // 빌드 로깅
 gradle.taskGraph.whenReady { graph ->
     if (graph.hasTask(build)) {
-        println "🔨 codeQuery 빌드 시작 (Java 17)"
+        println "🔨 codeQuery 빌드 시작 (Java 21)"
     }
 }

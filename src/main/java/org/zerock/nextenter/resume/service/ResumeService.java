@@ -165,6 +165,15 @@ public class ResumeService {
                 .userId(userId)
                 .title(request.getTitle())
                 .jobCategory(request.getJobCategory())
+                // ===== 개인정보 필드들 =====
+                .resumeName(request.getResumeName())
+                .resumeGender(request.getResumeGender())
+                .resumeBirthDate(request.getResumeBirthDate())
+                .resumeEmail(request.getResumeEmail())
+                .resumePhone(request.getResumePhone())
+                .resumeAddress(request.getResumeAddress())
+                .resumeDetailAddress(request.getResumeDetailAddress())
+                .profileImage(request.getProfileImage())
                 // ===== 분리된 섹션들 저장 =====
                 .experiences(request.getExperiences())
                 .certificates(request.getCertificates())
@@ -208,6 +217,32 @@ public class ResumeService {
         }
         if (request.getStatus() != null) {
             resume.setStatus(request.getStatus());
+        }
+
+        // ===== 개인정보 업데이트 =====
+        if (request.getResumeName() != null) {
+            resume.setResumeName(request.getResumeName());
+        }
+        if (request.getResumeGender() != null) {
+            resume.setResumeGender(request.getResumeGender());
+        }
+        if (request.getResumeBirthDate() != null) {
+            resume.setResumeBirthDate(request.getResumeBirthDate());
+        }
+        if (request.getResumeEmail() != null) {
+            resume.setResumeEmail(request.getResumeEmail());
+        }
+        if (request.getResumePhone() != null) {
+            resume.setResumePhone(request.getResumePhone());
+        }
+        if (request.getResumeAddress() != null) {
+            resume.setResumeAddress(request.getResumeAddress());
+        }
+        if (request.getResumeDetailAddress() != null) {
+            resume.setResumeDetailAddress(request.getResumeDetailAddress());
+        }
+        if (request.getProfileImage() != null) {
+            resume.setProfileImage(request.getProfileImage());
         }
 
         // ===== 분리된 섹션들 업데이트 =====
@@ -412,20 +447,29 @@ public class ResumeService {
         // ✅ 포트폴리오 목록 조회
         List<Portfolio> portfolios = portfolioRepository.findByResumeIdOrderByDisplayOrder(resume.getResumeId());
         
-        // ✅ 자기소개서 목록 조회 (이 이력서의 userId와 같은 자기소개서들)
-        List<CoverLetter> coverLetters = coverLetterRepository.findByUserIdOrderByCreatedAtDesc(resume.getUserId());
+        // ✅ 자기소개서 목록 조회 (이 이력서와 연결된 자기소개서들만)
+        List<CoverLetter> coverLetters = coverLetterRepository.findByResumeIdOrderByCreatedAtDesc(resume.getResumeId());
         
         ResumeResponse.ResumeResponseBuilder builder = ResumeResponse.builder()
                 .resumeId(resume.getResumeId())
                 .title(resume.getTitle())
                 .jobCategory(resume.getJobCategory())
-                // ===== User 테이블에서 가져온 정보 =====
+                // ===== User 테이블에서 가져온 정보 (하위호환용) =====
                 .userName(user != null ? user.getName() : null)
                 .userEmail(user != null ? user.getEmail() : null)
                 .userGender(user != null && user.getGender() != null ? user.getGender().name() : null)
                 .userPhone(user != null ? user.getPhone() : null)
                 .userAge(user != null ? user.getAge() : null)
                 .userBio(user != null ? user.getBio() : null)
+                // ===== Resume 테이블에 저장된 개인정보 =====
+                .resumeName(resume.getResumeName())
+                .resumeGender(resume.getResumeGender())
+                .resumeBirthDate(resume.getResumeBirthDate())
+                .resumeEmail(resume.getResumeEmail())
+                .resumePhone(resume.getResumePhone())
+                .resumeAddress(resume.getResumeAddress())
+                .resumeDetailAddress(resume.getResumeDetailAddress())
+                .profileImage(resume.getProfileImage())
                 // ===== 분리된 섹션들 =====
                 .experiences(resume.getExperiences())
                 .certificates(resume.getCertificates())
@@ -637,6 +681,7 @@ public class ResumeService {
 
                     CoverLetter coverLetter = CoverLetter.builder()
                             .userId(userId)
+                            .resumeId(resume.getResumeId())  // ✅ resumeId 연결
                             .title(file.getOriginalFilename())
                             .filePath(filePath)
                             .fileType(fileType)
@@ -712,6 +757,7 @@ public class ResumeService {
 
                     CoverLetter coverLetter = CoverLetter.builder()
                             .userId(userId)
+                            .resumeId(resumeId)  // ✅ resumeId 연결
                             .title(file.getOriginalFilename())
                             .filePath(filePath)
                             .fileType(fileType)

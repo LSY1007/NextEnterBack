@@ -5,18 +5,17 @@ import lombok.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "interview_message")
+@Table(name = "interview_annotation")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class InterviewMessage {
+public class InterviewAnnotation {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "message_id")
-    private Long messageId;
+    private Long annotationId;
 
     @Column(name = "interview_id", nullable = false)
     private Long interviewId;
@@ -24,26 +23,18 @@ public class InterviewMessage {
     @Column(name = "turn_number", nullable = false)
     private Integer turnNumber;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
-    private Role role;
+    @Column(columnDefinition = "TEXT")
+    private String analysisContent; // 분석 내용 (STAR 구조 준수 여부 등)
 
-    @Column(nullable = false, columnDefinition = "TEXT")
-    private String message;
+    private Double specificityScore; // 구체성 점수 (0.0~1.0)
+    private Double starComplianceScore; // STAR 구조 준수 점수
+    private Double jobFitScore; // 직무 적합성 점수
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    public enum Role {
-        INTERVIEWER, CANDIDATE
-    }
-
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();
-    }
-
-    public void updateMessage(String newMessage) {
-        this.message = newMessage;
     }
 }

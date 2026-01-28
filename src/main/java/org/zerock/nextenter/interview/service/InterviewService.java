@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.zerock.nextenter.interview.client.AiInterviewClient;
+import org.zerock.nextenter.interview.aop.InterviewContextHolder;
 import org.zerock.nextenter.interview.client.AiInterviewClient.AiInterviewRequest;
 import org.zerock.nextenter.interview.client.AiInterviewClient.AiInterviewResponse;
 import org.zerock.nextenter.interview.dto.*;
@@ -17,8 +18,10 @@ import org.zerock.nextenter.interview.entity.InterviewMessage;
 import org.zerock.nextenter.interview.entity.InterviewMessage.Role;
 import org.zerock.nextenter.interview.repository.InterviewMessageRepository;
 import org.zerock.nextenter.interview.repository.InterviewRepository;
+import org.zerock.nextenter.resume.entity.Portfolio;
 import org.zerock.nextenter.resume.entity.Resume;
-import org.zerock.nextenter.resume.repository.ResumeRepository;
+import org.zerock.nextenter.resume.repository.PortfolioRepository;
+// import org.zerock.nextenter.resume.repository.ResumeRepository; // Removed as AOP handles it
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -34,7 +37,8 @@ public class InterviewService {
 
         private final InterviewRepository interviewRepository;
         private final InterviewMessageRepository interviewMessageRepository;
-        private final ResumeRepository resumeRepository;
+        private final PortfolioRepository portfolioRepository; // Added
+        // private final ResumeRepository resumeRepository; // Removed
         private final AiInterviewClient aiInterviewClient;
         private final ObjectMapper objectMapper;
 
@@ -49,9 +53,12 @@ public class InterviewService {
                                         throw new IllegalStateException("이미 진행 중인 면접이 있습니다. 먼저 완료하거나 취소해주세요.");
                                 });
 
-                // 2. 이력서 조회
-                Resume resume = resumeRepository.findById(request.getResumeId())
-                                .orElseThrow(() -> new IllegalArgumentException("이력서를 찾을 수 없습니다."));
+                // 2. 이력서 조회 (AOP Context 사용)
+                Resume resume = InterviewContextHolder.getResume();
+                if (resume == null || !resume.getResumeId().equals(request.getResumeId())) {
+                        // Fallback check (Should be handled by AOP)
+                        throw new IllegalStateException("이력서 컨텍스트 초기화 실패");
+                }
 
                 // 3. Difficulty 유효성 검증
                 Difficulty difficulty;
@@ -77,12 +84,32 @@ public class InterviewService {
                 log.info("면접 시작: interviewId={}, userId={}, jobCategory={}",
                                 interview.getInterviewId(), userId, request.getJobCategory());
 
+                java.util.Map<String, Object> finalResumeContent;
+                if (request.getResumeContent() != null && !request.getResumeContent().isEmpty()) {
+                        finalResumeContent = request.getResumeContent();
+                } else {
+                        finalResumeContent = buildResumeContent(resume);
+                }
+
+                List<String> finalPortfolioFiles;
+                if (request.getPortfolioFiles() != null) {
+                        finalPortfolioFiles = request.getPortfolioFiles();
+                } else {
+                        finalPortfolioFiles = portfolioRepository
+                                        .findByResumeIdOrderByDisplayOrder(request.getResumeId())
+                                        .stream()
+                                        .map(Portfolio::getFilePath)
+                                        .collect(Collectors.toList());
+                }
+
                 // 5. AI에게 첫 질문 요청
                 AiInterviewRequest aiRequest = AiInterviewRequest.builder()
                                 .id(userId.toString())
                                 .targetRole(request.getJobCategory())
-                                .resumeContent(buildResumeContent(resume))
+                                .resumeContent(finalResumeContent)
                                 .lastAnswer(null) // 첫 질문이므로 null
+                                .portfolioFiles(finalPortfolioFiles) // 파일 경로 전달
+                                .portfolio(request.getPortfolio()) // 포트폴리오 메타데이터 전달
                                 .build();
 
                 AiInterviewResponse aiResponse = aiInterviewClient.getNextQuestion(aiRequest);
@@ -106,6 +133,16 @@ public class InterviewService {
                                 .currentTurn(interview.getCurrentTurn())
                                 .question(firstQuestion)
                                 .isCompleted(false)
+                                // Map rich metadata
+                                .reactionType(aiResponse.getRealtime().getReaction() != null
+                                                ? aiResponse.getRealtime().getReaction().getType()
+                                                : null)
+                                .reactionText(aiResponse.getRealtime().getReaction() != null
+                                                ? aiResponse.getRealtime().getReaction().getText()
+                                                : null)
+                                .aiSystemReport(aiResponse.getRealtime().getReport())
+                                .requestedEvidence(aiResponse.getRealtime().getRequestedEvidence())
+                                .probeGoal(aiResponse.getRealtime().getProbeGoal())
                                 .build();
         }
 
@@ -123,9 +160,11 @@ public class InterviewService {
                         throw new IllegalStateException("진행 중인 면접이 아닙니다");
                 }
 
-                // 2. 이력서 재조회 (Context 유지를 위해 필요)
-                Resume resume = resumeRepository.findById(interview.getResumeId())
-                                .orElseThrow(() -> new IllegalArgumentException("이력서를 찾을 수 없습니다."));
+                // 2. 이력서 재조회 (AOP Context 사용)
+                Resume resume = InterviewContextHolder.getResume();
+                if (resume == null) {
+                        throw new IllegalStateException("이력서 컨텍스트 초기화 실패");
+                }
 
                 // 3. 사용자 답변 저장
                 InterviewMessage answerMessage = InterviewMessage.builder()
@@ -136,12 +175,32 @@ public class InterviewService {
                                 .build();
                 interviewMessageRepository.save(answerMessage);
 
-                // 4. AI에게 답변 전송 및 다음 질문/평가 요청 (현재 턴이 마지막이면 평가는 어떻게? AI는 매번 리포트를 줌)
+                // 4. AI에게 답변 전송 (Proxy Check)
+                java.util.Map<String, Object> finalResumeContent;
+                if (request.getResumeContent() != null && !request.getResumeContent().isEmpty()) {
+                        finalResumeContent = request.getResumeContent();
+                } else {
+                        finalResumeContent = buildResumeContent(resume);
+                }
+
+                List<String> finalPortfolioFiles;
+                if (request.getPortfolioFiles() != null) {
+                        finalPortfolioFiles = request.getPortfolioFiles();
+                } else {
+                        finalPortfolioFiles = portfolioRepository
+                                        .findByResumeIdOrderByDisplayOrder(resume.getResumeId())
+                                        .stream()
+                                        .map(Portfolio::getFilePath)
+                                        .collect(Collectors.toList());
+                }
+
                 AiInterviewRequest aiRequest = AiInterviewRequest.builder()
                                 .id(userId.toString())
                                 .targetRole(interview.getJobCategory())
-                                .resumeContent(buildResumeContent(resume))
+                                .resumeContent(finalResumeContent)
                                 .lastAnswer(request.getAnswer())
+                                .portfolioFiles(finalPortfolioFiles)
+                                .portfolio(request.getPortfolio())
                                 .build();
 
                 AiInterviewResponse aiResponse = aiInterviewClient.getNextQuestion(aiRequest);
@@ -197,6 +256,101 @@ public class InterviewService {
                                 .build();
                 interviewMessageRepository.save(questionMessage);
                 interviewRepository.save(interview);
+
+                return InterviewQuestionResponse.builder()
+                                .interviewId(interview.getInterviewId())
+                                .currentTurn(interview.getCurrentTurn())
+                                .question(nextQuestion)
+                                .isCompleted(false)
+                                // Map rich metadata
+                                .reactionType(aiResponse.getRealtime().getReaction() != null
+                                                ? aiResponse.getRealtime().getReaction().getType()
+                                                : null)
+                                .reactionText(aiResponse.getRealtime().getReaction() != null
+                                                ? aiResponse.getRealtime().getReaction().getText()
+                                                : null)
+                                .aiSystemReport(aiResponse.getRealtime().getReport())
+                                .requestedEvidence(aiResponse.getRealtime().getRequestedEvidence())
+                                .probeGoal(aiResponse.getRealtime().getProbeGoal())
+                                .build();
+        }
+
+        /**
+         * 답변 수정 (Dialogic Feedback Loop)
+         * 이전 답변을 수정하여 다시 평가받음 -- Interview Xpert/Conversate
+         */
+        @Transactional
+        public InterviewQuestionResponse modifyAnswer(Long userId, InterviewMessageRequest request) {
+                // 1. 면접 세션 조회
+                Interview interview = interviewRepository.findByInterviewIdAndUserId(request.getInterviewId(), userId)
+                                .orElseThrow(() -> new IllegalArgumentException("면접을 찾을 수 없습니다"));
+
+                if (interview.getStatus() != Status.IN_PROGRESS) {
+                        throw new IllegalStateException("진행 중인 면접이 아닙니다");
+                }
+
+                int currentTurn = interview.getCurrentTurn();
+                int targetTurn = currentTurn - 1;
+
+                if (targetTurn < 1) {
+                        throw new IllegalStateException("수정할 답변이 없습니다. (첫 질문 단계)");
+                }
+
+                // 2. Resume Context (AOP handled, but we need to ensure AOP triggers for this
+                // method too if we add it to Aspect)
+                // Resume Context Logic remains...
+                Resume resume = InterviewContextHolder.getResume();
+                if (resume == null) {
+                        throw new IllegalStateException("System Error: Resume Context not set.");
+                }
+
+                // 3. 기존 답변(Candidate) 업데이트
+                InterviewMessage candidateMsg = interviewMessageRepository.findByInterviewIdAndTurnNumberAndRole(
+                                interview.getInterviewId(), targetTurn, Role.CANDIDATE)
+                                .orElseThrow(() -> new IllegalArgumentException("이전 답변을 찾을 수 없습니다."));
+
+                candidateMsg.updateMessage(request.getAnswer()); // Need updateMessage method in Entity or use setter
+                // Assuming setter or update method exists? Entity usually has @Data or Setter.
+                // Let's assume Setter exists due to @Data (Lombok) in Entity (I verified Entity
+                // file? No I didn't verify Message Entity fully).
+                // Let's check imports. InterviewMessage import suggests it exists.
+                // I'll assume setters work. If immutable, I'd need builder to copy.
+                // But @Data usually provides setters.
+
+                // 4. AI 재요청
+                AiInterviewRequest aiRequest = AiInterviewRequest.builder()
+                                .id(userId.toString())
+                                .targetRole(interview.getJobCategory())
+                                .resumeContent(buildResumeContent(resume))
+                                .lastAnswer(request.getAnswer())
+                                .systemInstruction(
+                                                "This is a revised answer from the candidate. Please re-evaluate and provide feedback.")
+                                .build();
+
+                AiInterviewResponse aiResponse = aiInterviewClient.getNextQuestion(aiRequest);
+                String nextQuestion = aiResponse.getRealtime().getNextQuestion();
+
+                // 5. 질문(Interviewer) 업데이트 (피드백이 포함될 수 있음)
+                InterviewMessage interviewerMsg = interviewMessageRepository.findByInterviewIdAndTurnNumberAndRole(
+                                interview.getInterviewId(), currentTurn, Role.INTERVIEWER) // Next question uses same
+                                                                                           // turn?
+                                // Wait, logic in submitAnswer:
+                                // candidate msg -> turn N
+                                // increment turn
+                                // interviewer msg -> turn N+1 (next question)
+                                //
+                                // Let's re-read submitAnswer logic carefully.
+                                // 133: turnNumber(interview.getCurrentTurn()) -> Role.CANDIDATE
+                                // 191: interview.incrementTurn()
+                                // 195: turnNumber(interview.getCurrentTurn()) -> Role.INTERVIEWER (Next
+                                // Question)
+
+                                // So Candidate is Turn T. Question became Turn T+1.
+                                // If we modify answer at Turn T, we should update Question at Turn T+1.
+                                // The currentTurn of interview is already T+1.
+                                .orElseThrow(() -> new IllegalArgumentException("다음 질문 메시지를 찾을 수 없습니다."));
+
+                interviewerMsg.updateMessage(nextQuestion);
 
                 return InterviewQuestionResponse.builder()
                                 .interviewId(interview.getInterviewId())

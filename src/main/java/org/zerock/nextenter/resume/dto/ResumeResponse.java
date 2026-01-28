@@ -20,13 +20,29 @@ public class ResumeResponse {
     private String title;
     private String jobCategory;
 
-    // ===== 사용자 기본 정보 (User 테이블에서 조회) =====
+    // ===== 사용자 기본 정보 (User 테이블에서 조회) - 하위호환용 =====
+    @Deprecated
     private String userName;      // User.name
+    @Deprecated
     private String userEmail;     // User.email
+    @Deprecated
     private String userGender;    // User.gender
+    @Deprecated
     private String userPhone;     // User.phone
+    @Deprecated
     private Integer userAge;      // User.age
+    @Deprecated
     private String userBio;       // User.bio
+
+    // ===== 이력서별 개인정보 (Resume 테이블에 저장된 정보) =====
+    private String resumeName;           // 이름
+    private String resumeGender;         // 성별
+    private String resumeBirthDate;      // 생년월일
+    private String resumeEmail;          // 이메일
+    private String resumePhone;          // 연락처
+    private String resumeAddress;        // 주소
+    private String resumeDetailAddress;  // 상세주소
+    private String profileImage;         // 프로필 이미지
 
     // ===== 분리된 섹션들 =====
 

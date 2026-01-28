@@ -10,6 +10,7 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "cover_letter")
 @Getter
+@Setter  // ✅ Setter 추가
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
 @Builder
@@ -22,6 +23,10 @@ public class CoverLetter {
 
     @Column(name = "user_id", nullable = false)
     private Long userId;
+
+    // ✅ 이력서와의 연결
+    @Column(name = "resume_id")
+    private Long resumeId;
 
     @Column(nullable = false, length = 100)
     private String title;

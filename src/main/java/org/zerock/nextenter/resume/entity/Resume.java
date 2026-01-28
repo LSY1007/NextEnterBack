@@ -31,6 +31,32 @@ public class Resume {
     @Column(name = "file_type", length = 20)
     private String fileType;
 
+    // ===== 개인정보 필드들 (이력서별 개인정보) =====
+    
+    @Column(name = "resume_name", length = 50)
+    private String resumeName; // 이력서에 표시할 이름
+    
+    @Column(name = "resume_gender", length = 10)
+    private String resumeGender; // 성별
+    
+    @Column(name = "resume_birth_date", length = 20)
+    private String resumeBirthDate; // 생년월일
+    
+    @Column(name = "resume_email", length = 100)
+    private String resumeEmail; // 이메일
+    
+    @Column(name = "resume_phone", length = 20)
+    private String resumePhone; // 연락처
+    
+    @Column(name = "resume_address", length = 200)
+    private String resumeAddress; // 주소
+    
+    @Column(name = "resume_detail_address", length = 100)
+    private String resumeDetailAddress; // 상세주소
+    
+    @Column(name = "profile_image", columnDefinition = "LONGTEXT")
+    private String profileImage; // 프로필 이미지 (Base64)
+
     // ===== 분리된 섹션 컬럼들 (JSON 타입) =====
 
     // 경험/활동/교육

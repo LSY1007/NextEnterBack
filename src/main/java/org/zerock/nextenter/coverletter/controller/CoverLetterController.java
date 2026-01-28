@@ -124,12 +124,41 @@ public class CoverLetterController {
         if (userId == null) {
             userId = 1L;
         }
+        
+        // ✅ 자기소개서 정보 조회
+        CoverLetterDto coverLetter = coverLetterService.getDetail(userId, id);
+        
+        // ✅ 파일 다운로드
         Resource resource = coverLetterFileService.downloadFile(userId, id);
+        
+        // ✅ 파일 타입에 따른 Content-Type 설정
+        MediaType contentType = MediaType.APPLICATION_OCTET_STREAM;
+        if (coverLetter.getFileType() != null) {
+            String fileType = coverLetter.getFileType().toLowerCase();
+            if (fileType.equals("pdf")) {
+                contentType = MediaType.APPLICATION_PDF;
+            } else if (fileType.equals("docx")) {
+                contentType = MediaType.valueOf("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+            } else if (fileType.equals("hwp")) {
+                contentType = MediaType.valueOf("application/x-hwp");
+            }
+        }
+        
+        // ✅ 파일명에 확장자 포함 (파일명.확장자)
+        String fileName = coverLetter.getTitle();
+        if (!fileName.toLowerCase().endsWith("." + coverLetter.getFileType().toLowerCase())) {
+            fileName = fileName + "." + coverLetter.getFileType();
+        }
+        
+        // ✅ 한글 파일명 인코딩
+        String encodedFileName = new String(
+                fileName.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                java.nio.charset.StandardCharsets.ISO_8859_1);
 
         return ResponseEntity.ok()
-                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .contentType(contentType)
                 .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=\"" + resource.getFilename() + "\"")
+                        "attachment; filename=\"" + encodedFileName + "\"")
                 .body(resource);
     }
 

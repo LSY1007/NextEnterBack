@@ -27,35 +27,38 @@ public class AiRecommendRequest {
     private Long resumeId;
     private Long userId;
 
-    @JsonAlias({"content"})
+    @JsonAlias({ "content" })
     private Object resumeText;
 
     private String jobCategory; // 희망 직무
 
     // [스킬]
     @Builder.Default
-    @JsonAlias({"skill", "skills"})
+    @JsonAlias({ "skill", "skills" })
     private Object skills = new ArrayList<>();
 
-    private Integer experience;       // 년
+    private Integer experience; // 년
     private Integer experienceMonths; // 개월
 
     // [학력]
     @Builder.Default
-    @JsonAlias({"education", "educations"})
+    @JsonAlias({ "education", "educations" })
     private Object educations = new ArrayList<>();
 
     // [경력]
     @Builder.Default
-    @JsonAlias({"career", "careers", "professional_experience", "professional_experiences", "work_experience"})
+    @JsonAlias({ "career", "careers", "professional_experience", "professional_experiences", "work_experience" })
     private Object careers = new ArrayList<>();
 
     // [프로젝트]
     @Builder.Default
-    @JsonAlias({"project", "projects", "activities", "experiences", "project_experience", "project_experiences"})
+    @JsonAlias({ "project", "projects", "activities", "experiences", "project_experience", "project_experiences" })
     private Object projects = new ArrayList<>();
 
     private String preferredLocation;
+
+    // [New] 파일 경로 (PDF/DOCX)
+    private String filePath;
 
     // ---------------------------------------------------------
     // AI 이력서 변환 로직
@@ -65,6 +68,11 @@ public class AiRecommendRequest {
 
         result.put("id", resumeId != null ? String.valueOf(resumeId) : "unknown");
         result.put("target_role", convertJobCategoryToRole(this.jobCategory));
+
+        // [New] 파일 경로 추가 (AI 서버가 파싱할 수 있도록)
+        if (this.filePath != null && !this.filePath.isEmpty()) {
+            result.put("file_path", this.filePath);
+        }
 
         // 이력서 데이터 (String List로 변환)
         List<String> cleanSkills = extractTextList(this.skills);
@@ -138,8 +146,10 @@ public class AiRecommendRequest {
 
     // 유틸 [Object -> String] 추출 함수
     private String extractString(Object input) {
-        if (input == null) return null;
-        if (input instanceof String) return (String) input;
+        if (input == null)
+            return null;
+        if (input instanceof String)
+            return (String) input;
         if (input instanceof Map) {
             Map<?, ?> map = (Map<?, ?>) input;
             Object content = map.get("content");
@@ -148,7 +158,8 @@ public class AiRecommendRequest {
             }
             List<String> values = new ArrayList<>();
             for (Object val : map.values()) {
-                if (val != null) values.add(val.toString());
+                if (val != null)
+                    values.add(val.toString());
             }
             return String.join("\n", values);
         }
@@ -158,7 +169,8 @@ public class AiRecommendRequest {
     // 유틸 [Object -> List<String>] 만능 리스트 추출 함수
     private List<String> extractTextList(Object input) {
         List<String> result = new ArrayList<>();
-        if (input == null) return result;
+        if (input == null)
+            return result;
 
         if (input instanceof Iterable) {
             for (Object item : (Iterable<?>) input) {
@@ -171,22 +183,24 @@ public class AiRecommendRequest {
     }
 
     private void processSingleItem(Object item, List<String> result) {
-        if (item == null) return;
+        if (item == null)
+            return;
 
         if (item instanceof String) {
             String s = ((String) item).trim();
-            if (!s.isEmpty()) result.add(s);
+            if (!s.isEmpty())
+                result.add(s);
         } else if (item instanceof Map) {
             Map<?, ?> map = (Map<?, ?>) item;
-            List<String> values = new ArrayList<>(); 
-            
+            List<String> values = new ArrayList<>();
+
             // 가능한 모든 키워드 검색
             String[] keysToCheck = {
-                "company", "companyName", "company_name",
-                "school", "schoolName", "school_name",
-                "project", "projectName", "project_title",
-                "title", "name", "value", "role", "position", 
-                "period", "date", "description", "desc", "career", "careers"
+                    "company", "companyName", "company_name",
+                    "school", "schoolName", "school_name",
+                    "project", "projectName", "project_title",
+                    "title", "name", "value", "role", "position",
+                    "period", "date", "description", "desc", "career", "careers"
             };
 
             for (String key : keysToCheck) {
@@ -220,12 +234,17 @@ public class AiRecommendRequest {
     }
 
     private String convertJobCategoryToRole(String category) {
-        if (category == null) return "Backend Developer";
+        if (category == null)
+            return "Backend Developer";
         String lower = category.toLowerCase().trim();
-        if (lower.contains("ui") || lower.contains("ux") || lower.contains("design")) return "UI/UX Designer";
-        if (lower.contains("pm") || lower.contains("기획")) return "Product Manager";
-        if (lower.contains("front") || lower.contains("프론트")) return "Frontend Developer";
-        if (lower.contains("full") || lower.contains("풀스택")) return "Fullstack Developer";
+        if (lower.contains("ui") || lower.contains("ux") || lower.contains("design"))
+            return "UI/UX Designer";
+        if (lower.contains("pm") || lower.contains("기획"))
+            return "Product Manager";
+        if (lower.contains("front") || lower.contains("프론트"))
+            return "Frontend Developer";
+        if (lower.contains("full") || lower.contains("풀스택"))
+            return "Fullstack Developer";
         return "Backend Developer";
     }
 
@@ -238,7 +257,8 @@ public class AiRecommendRequest {
      */
     private List<Map<String, Object>> extractCareerList(Object careers, double experienceYears) {
         List<Map<String, Object>> result = new ArrayList<>();
-        if (careers == null) return result;
+        if (careers == null)
+            return result;
 
         List<Object> careerItems = new ArrayList<>();
         if (careers instanceof Iterable) {
@@ -254,7 +274,7 @@ public class AiRecommendRequest {
 
             if (item instanceof Map) {
                 Map<?, ?> map = (Map<?, ?>) item;
-                
+
                 // company_name 추출
                 String companyName = extractField(map, "company", "companyName", "company_name", "회사명");
                 if (companyName == null || companyName.isEmpty()) {
@@ -326,10 +346,10 @@ public class AiRecommendRequest {
      */
     private List<String> extractKeyTasks(Map<?, ?> map) {
         List<String> result = new ArrayList<>();
-        
+
         // 가능한 키 이름들
-        String[] keysToCheck = {"key_tasks", "tasks", "주요업무", "responsibilities", "담당업무", "description", "desc"};
-        
+        String[] keysToCheck = { "key_tasks", "tasks", "주요업무", "responsibilities", "담당업무", "description", "desc" };
+
         Object tasksValue = null;
         for (String key : keysToCheck) {
             tasksValue = map.get(key);
@@ -352,7 +372,7 @@ public class AiRecommendRequest {
                     }
                 }
             }
-        } 
+        }
         // String인 경우 - 쉼표, 줄바꿈, 또는 세미콜론으로 분리
         else if (tasksValue instanceof String) {
             String tasksStr = ((String) tasksValue).trim();

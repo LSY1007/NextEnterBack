@@ -37,62 +37,11 @@ public class ApplyService {
     private final ResumeRepository resumeRepository;
     private final org.zerock.nextenter.notification.NotificationService notificationService;
 
-    /**
-     * 인재검색에서 면접 요청 (기업회원용)
-     */
+    @Deprecated
     @Transactional
     public ApplyResponse createInterviewRequest(Long companyId, Long userId, Long jobId) {
-        log.info("면접 요청 등록 - companyId: {}, userId: {}, jobId: {}",
-                companyId, userId, jobId);
-
-        // 중복 확인
-        boolean alreadyApplied = applyRepository.existsByUserIdAndJobId(userId, jobId);
-        if (alreadyApplied) {
-            throw new IllegalStateException("이미 면접 요청한 지원자입니다");
-        }
-
-        // 공고 유효성 검증
-        JobPosting job = jobPostingRepository.findById(jobId)
-                .orElseThrow(() -> new IllegalArgumentException("공고를 찾을 수 없습니다"));
-
-        if (!job.getCompanyId().equals(companyId)) {
-            throw new IllegalArgumentException("해당 공고의 기업이 아닙니다");
-        }
-
-        // 면접 요청 생성
-        Apply apply = Apply.builder()
-                .userId(userId)
-                .jobId(jobId)
-                .status(Apply.Status.PENDING)
-                .interviewStatus("REQUESTED")
-                .build();
-
-        apply = applyRepository.save(apply);
-        
-        // 지원자에게 면접 요청 알림 전송
-        try {
-            User companyUser = userRepository.findById(companyId).orElse(null);
-            String companyName = companyUser != null && companyUser.getName() != null
-                ? companyUser.getName() : "기업";
-            
-            log.info("알림 전송 시도 - userId: {}, companyName: {}, jobTitle: {}",
-                userId, companyName, job.getTitle());
-            
-            notificationService.notifyApplicationStatus(
-                userId,
-                companyName,
-                "면접 요청",
-                apply.getApplyId()
-            );
-            
-            log.info("면접 요청 알림 전송 성공!");
-        } catch (Exception e) {
-            log.error("면접 요청 알림 전송 실패", e);
-        }
-        
-        log.info("면접 요청 완료 - applyId: {}", apply.getApplyId());
-
-        return convertToDetailResponse(apply);
+        throw new UnsupportedOperationException(
+                "이 메서드는 더 이상 사용되지 않습니다. InterviewOfferService.createOffer()를 사용하세요.");
     }
 
     /**
@@ -100,16 +49,14 @@ public class ApplyService {
      */
     @Transactional
     public ApplyResponse createApply(Long userId, ApplyRequest request) {
-        log.info("지원 등록 - userId: {}, jobId: {}, resumeId: {}",
-                userId, request.getJobId(), request.getResumeId());
+        log.info("▶ [ApplyService] 지원 등록 시작 - userId: {}, jobId: {}", userId, request.getJobId());
 
-        // 중복 지원 확인
         boolean alreadyApplied = applyRepository.existsByUserIdAndJobId(userId, request.getJobId());
         if (alreadyApplied) {
+            log.error("❌ 이미 지원한 공고입니다 - userId: {}, jobId: {}", userId, request.getJobId());
             throw new IllegalStateException("이미 지원한 공고입니다");
         }
 
-        // 공고 유효성 검증
         JobPosting job = jobPostingRepository.findById(request.getJobId())
                 .orElseThrow(() -> new IllegalArgumentException("공고를 찾을 수 없습니다"));
 
@@ -117,7 +64,6 @@ public class ApplyService {
             throw new IllegalStateException("마감된 공고입니다");
         }
 
-        // 이력서 유효성 검증
         Resume resume = resumeRepository.findById(request.getResumeId())
                 .orElseThrow(() -> new IllegalArgumentException("이력서를 찾을 수 없습니다"));
 
@@ -125,236 +71,162 @@ public class ApplyService {
             throw new IllegalArgumentException("자신의 이력서만 사용할 수 있습니다");
         }
 
-        // 지원 생성
+        // ✅ [수정] DocumentStatus 사용 (Status 필드 없음)
         Apply apply = Apply.builder()
                 .userId(userId)
                 .jobId(request.getJobId())
                 .resumeId(request.getResumeId())
                 .coverLetterId(request.getCoverLetterId())
-                .status(Apply.Status.PENDING)
+                .documentStatus(Apply.DocumentStatus.PENDING)
+                .finalStatus(null)
                 .build();
 
         apply = applyRepository.save(apply);
-        
-        // 공고의 지원자 수 증가
-        log.info("지원자 수 증가 전 - jobId: {}", request.getJobId());
+        log.info("✅ 지원 정보 저장 완료 - applyId: {}", apply.getApplyId());
+
         jobPostingRepository.incrementApplicantCount(request.getJobId());
-        log.info("지원자 수 증가 후 - jobId: {}", request.getJobId());
-        
-        // 실제 지원자 수 확인
-        Long actualCount = applyRepository.countByJobId(request.getJobId());
-        log.info("실제 지원자 수 - jobId: {}, count: {}", request.getJobId(), actualCount);
-        
-        // 기업에 새로운 지원자 알림 전송
+
         try {
-            log.info("알림 전송 시도 - companyId: {}, jobTitle: {}", 
-                job.getCompanyId(), job.getTitle());
-            
             notificationService.notifyNewApplication(
-                job.getCompanyId(),
-                job.getTitle(),
-                apply.getApplyId()
+                    job.getCompanyId(), job.getTitle(), apply.getApplyId()
             );
-            
-            log.info("새 지원자 알림 전송 성공!");
         } catch (Exception e) {
-            log.error("새 지원자 알림 전송 실패", e);
+            log.error("⚠️ 알림 전송 실패 (지원은 정상 처리됨)", e);
         }
-        
-        log.info("지원 완료 - applyId: {}", apply.getApplyId());
 
         return convertToDetailResponse(apply);
     }
 
-    /**
-     * 내 지원 내역 조회 (개인회원용) - 단순 목록
-     */
     public List<ApplyListResponse> getMyApplies(Long userId) {
-        log.info("내 지원 내역 조회 - userId: {}", userId);
-
         List<Apply> applies = applyRepository.findByUserIdOrderByAppliedAtDesc(userId);
-        
-        return applies.stream()
-                .map(this::convertToListResponse)
-                .collect(Collectors.toList());
+        return applies.stream().map(this::convertToListResponse).collect(Collectors.toList());
     }
 
-    /**
-     * 내 지원 내역 조회 (개인회원용) - 페이징
-     */
     public Page<ApplyListResponse> getMyApplications(Long userId, int page, int size) {
-        log.info("내 지원 내역 조회 - userId: {}", userId);
-
         Pageable pageable = PageRequest.of(page, size);
         List<Apply> applies = applyRepository.findByUserIdOrderByAppliedAtDesc(userId);
-        
-        // List를 Page로 변환
+
         int start = (int) pageable.getOffset();
         int end = Math.min((start + pageable.getPageSize()), applies.size());
         List<Apply> pageContent = applies.subList(start, end);
-        
-        Page<Apply> applyPage = new org.springframework.data.domain.PageImpl<>(
-            pageContent, pageable, applies.size()
-        );
 
-        return applyPage.map(this::convertToListResponse);
+        return new org.springframework.data.domain.PageImpl<>(
+                pageContent, pageable, applies.size()
+        ).map(this::convertToListResponse);
     }
 
-    /**
-     * 기업의 모든 지원자 조회 (페이징)
-     */
-    public Page<ApplyListResponse> getAppliesByCompany(
-            Long companyId, Long jobId, int page, int size) {
-
-        log.info("기업 지원자 조회 - companyId: {}, jobId: {}", companyId, jobId);
-
+    public Page<ApplyListResponse> getAppliesByCompany(Long companyId, Long jobId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
         Page<Apply> applies;
-
         if (jobId != null) {
-            // 특정 공고의 지원자만 조회
             applies = applyRepository.findByJobIdPaged(jobId, pageable);
         } else {
-            // 기업의 모든 공고에 대한 지원자 조회
             applies = applyRepository.findByCompanyId(companyId, pageable);
         }
-
         return applies.map(this::convertToListResponse);
     }
 
-    /**
-     * 지원자 상세 조회
-     */
     public ApplyResponse getApplyDetail(Long applyId, Long companyId) {
-        log.info("지원자 상세 조회 - applyId: {}, companyId: {}", applyId, companyId);
-
         Apply apply = applyRepository.findByIdAndCompanyId(applyId, companyId)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "지원 내역을 찾을 수 없거나 접근 권한이 없습니다"));
-
+                .orElseThrow(() -> new IllegalArgumentException("지원 내역을 찾을 수 없습니다"));
         return convertToDetailResponse(apply);
     }
 
-    /**
-     * 지원 상태 변경 (합격/불합격 등)
-     */
     @Transactional
-    public ApplyResponse updateApplyStatus(
-            Long applyId, Long companyId, ApplyStatusUpdateRequest request) {
-
-        log.info("지원 상태 변경 - applyId: {}, status: {}", applyId, request.getStatus());
+    public ApplyResponse updateApplyStatus(Long applyId, Long companyId, ApplyStatusUpdateRequest request) {
+        log.info("▶ [ApplyService] 지원 상태 변경 요청 - applyId: {}, status: {}", applyId, request.getStatus());
 
         Apply apply = applyRepository.findByIdAndCompanyId(applyId, companyId)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "지원 내역을 찾을 수 없거나 접근 권한이 없습니다"));
+                .orElseThrow(() -> new IllegalArgumentException("지원 내역을 찾을 수 없습니다"));
 
-        // 상태 변경
-        Apply.Status newStatus = Apply.Status.valueOf(request.getStatus());
-        apply.setStatus(newStatus);
+        // ✅ [수정] 입력값에 따라 DocumentStatus 또는 FinalStatus 업데이트
+        String statusValue = request.getStatus();
+
+        try {
+            if (statusValue.equals("ACCEPTED")) {
+                apply.setFinalStatus(Apply.FinalStatus.PASSED);
+            } else if (statusValue.equals("REJECTED") || statusValue.equals("CANCELED")) {
+                apply.setFinalStatus(Apply.FinalStatus.valueOf(statusValue));
+            } else {
+                apply.setDocumentStatus(Apply.DocumentStatus.valueOf(statusValue));
+            }
+        } catch (IllegalArgumentException e) {
+            log.warn("⚠️ 알 수 없는 상태값: {}. 기본값(REVIEWING)으로 설정합니다.", statusValue);
+            apply.setDocumentStatus(Apply.DocumentStatus.REVIEWING);
+        }
+
         apply.setNotes(request.getNotes());
         apply.setReviewedAt(LocalDateTime.now());
-
         applyRepository.save(apply);
-        
-        // 지원자에게 상태 변경 알림 전송
+        log.info("✅ 상태 변경 완료 - DocumentStatus: {}, FinalStatus: {}", apply.getDocumentStatus(), apply.getFinalStatus());
+
         try {
             JobPosting job = jobPostingRepository.findById(apply.getJobId()).orElse(null);
             if (job != null) {
-                // 회사명 가져오기
                 User companyUser = userRepository.findById(job.getCompanyId()).orElse(null);
-                String companyName = companyUser != null && companyUser.getName() != null
-                    ? companyUser.getName() : job.getTitle();
-                
-                String statusText = getStatusText(newStatus);
-                
-                log.info("알림 전송 시도 - userId: {}, companyName: {}, status: {}",
-                    apply.getUserId(), companyName, statusText);
-                
+                String companyName = companyUser != null ? companyUser.getName() : job.getTitle();
+
+                String statusText = convertToLegacyStatus(apply);
+
                 notificationService.notifyApplicationStatus(
-                    apply.getUserId(),
-                    companyName,
-                    statusText,
-                    apply.getApplyId()
+                        apply.getUserId(), companyName, statusText, apply.getApplyId()
                 );
-                
-                log.info("지원 상태 변경 알림 전송 성공!");
             }
         } catch (Exception e) {
-            log.error("지원 상태 변경 알림 전송 실패", e);
+            log.error("알림 전송 실패", e);
         }
 
         return convertToDetailResponse(apply);
     }
 
-    /**
-     * 면접 상태 변경
-     */
+    @Deprecated
     @Transactional
-    public ApplyResponse updateInterviewStatus(
-            Long applyId, Long companyId, String interviewStatus) {
+    public ApplyResponse updateInterviewStatus(Long applyId, Long companyId, String interviewStatus) {
+        throw new UnsupportedOperationException("InterviewOfferService를 사용하세요.");
+    }
 
-        log.info("면접 상태 변경 - applyId: {}, interviewStatus: {}", applyId, interviewStatus);
+    // ✅ [지원 취소 기능] 로그 포함 + DocumentStatus/FinalStatus 모두 취소 처리
+    @Transactional
+    public void cancelApply(Long userId, Long applyId) {
+        log.info("========== [ApplyService] 지원 취소 요청 시작 (User: {}, Apply: {}) ==========", userId, applyId);
 
-        Apply apply = applyRepository.findByIdAndCompanyId(applyId, companyId)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "지원 내역을 찾을 수 없거나 접근 권한이 없습니다"));
+        Apply apply = applyRepository.findById(applyId)
+                .orElseThrow(() -> {
+                    log.error("❌ [오류] 지원 내역 없음 - applyId: {}", applyId);
+                    return new IllegalArgumentException("지원 내역을 찾을 수 없습니다.");
+                });
 
-        // 면접 상태 변경
-        apply.setInterviewStatus(interviewStatus);
-        apply.setUpdatedAt(LocalDateTime.now());
-
-        applyRepository.save(apply);
-        
-        // 지원자에게 면접 상태 변경 알림 전송
-        try {
-            JobPosting job = jobPostingRepository.findById(apply.getJobId()).orElse(null);
-            if (job != null) {
-                User companyUser = userRepository.findById(job.getCompanyId()).orElse(null);
-                String companyName = companyUser != null && companyUser.getName() != null
-                    ? companyUser.getName() : job.getTitle();
-                
-                String statusText = getInterviewStatusText(interviewStatus);
-                
-                log.info("알림 전송 시도 - userId: {}, companyName: {}, interviewStatus: {}",
-                    apply.getUserId(), companyName, statusText);
-                
-                notificationService.notifyApplicationStatus(
-                    apply.getUserId(),
-                    companyName,
-                    statusText,
-                    apply.getApplyId()
-                );
-                
-                log.info("면접 상태 변경 알림 전송 성공!");
-            }
-        } catch (Exception e) {
-            log.error("면접 상태 변경 알림 전송 실패", e);
+        if (!apply.getUserId().equals(userId)) {
+            log.error("❌ [오류] 권한 없음 - 내 지원 내역 아님 (RequestUser: {}, Owner: {})", userId, apply.getUserId());
+            throw new IllegalArgumentException("본인의 지원 내역만 취소할 수 있습니다.");
         }
 
-        return convertToDetailResponse(apply);
+        log.info("🔍 변경 전 상태 - Document: {}, Final: {}", apply.getDocumentStatus(), apply.getFinalStatus());
+
+        // ✅ Apply.java에 있는 Enum 값 사용 (Status 아님!)
+        apply.setFinalStatus(Apply.FinalStatus.CANCELED);
+        apply.setDocumentStatus(Apply.DocumentStatus.CANCELED);
+
+        // 명시적 저장 (로그 확인용)
+        Apply savedApply = applyRepository.save(apply);
+
+        log.info("✅ 변경 후 상태 - Document: {}, Final: {}", savedApply.getDocumentStatus(), savedApply.getFinalStatus());
+        log.info("========== [ApplyService] 지원 취소 완료 ==========");
     }
 
     // Private helper methods
-    
-    private String getInterviewStatusText(String interviewStatus) {
-        if (interviewStatus == null) return "면접 대기";
-        switch (interviewStatus) {
-            case "REQUESTED": return "면접 요청";
-            case "ACCEPTED": return "면접 수락";
-            case "REJECTED": return "면접 거절";
-            default: return interviewStatus;
+
+    // ✅ [필수] 프론트엔드 호환용 상태 변환 (이게 없으면 컴파일 에러남)
+    private String convertToLegacyStatus(Apply apply) {
+        if (apply.getFinalStatus() != null) {
+            if (apply.getFinalStatus() == Apply.FinalStatus.PASSED) return "ACCEPTED";
+            return apply.getFinalStatus().name(); // CANCELED, REJECTED 등 반환
         }
-    }
-    
-    private String getStatusText(Apply.Status status) {
-        switch (status) {
-            case PENDING: return "검토 중";
-            case REVIEWING: return "서류 검토중";
-            case ACCEPTED: return "합격";
-            case REJECTED: return "불합격";
-            case CANCELED: return "지원 취소";
-            default: return status.name();
+        if (apply.getDocumentStatus() != null) {
+            if (apply.getDocumentStatus() == Apply.DocumentStatus.PASSED) return "ACCEPTED";
+            return apply.getDocumentStatus().name();
         }
+        return "PENDING";
     }
 
     private ApplyListResponse convertToListResponse(Apply apply) {
@@ -363,51 +235,9 @@ public class ApplyService {
         Resume resume = apply.getResumeId() != null ?
                 resumeRepository.findById(apply.getResumeId()).orElse(null) : null;
 
-        // 기술 스택 파싱 (기존 로직 유지)
-        List<String> skills = List.of();
-        if (resume != null && resume.getSkills() != null && !resume.getSkills().isEmpty()) {
-            try {
-                if (resume.getSkills().trim().startsWith("[")) {
-                    com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-                    skills = mapper.readValue(resume.getSkills(),
-                            mapper.getTypeFactory().constructCollectionType(List.class, String.class));
-                } else {
-                    skills = Arrays.stream(resume.getSkills().split(","))
-                            .map(String::trim)
-                            .filter(s -> !s.isEmpty())
-                            .collect(Collectors.toList());
-                }
-            } catch (Exception e) {
-                log.warn("skills 파싱 실패, 쉼표 구분으로 재시도: {}", e.getMessage());
-                skills = Arrays.stream(resume.getSkills().split(","))
-                        .map(String::trim)
-                        .filter(s -> !s.isEmpty())
-                        .collect(Collectors.toList());
-            }
-        }
-
-        // 경력 계산 (임시 - 추후 Resume에서 파싱)
-        String experience = "5년"; // TODO: structuredData에서 파싱
-
-        String companyNameVal = "알 수 없음";
-        String locationVal = "";
-        String deadlineVal = "";
-
-        if (job != null) {
-            // 1. 회사명: JobPosting엔 companyId만 있으므로 임시로 ID 표시
-            // (실제 회사명을 띄우려면 CompanyRepository 추가 연결이 필요합니다)
-            companyNameVal = "(주)회사-" + job.getCompanyId();
-
-            // 2. 지역: null 체크 후 할당
-            if (job.getLocation() != null) {
-                locationVal = job.getLocation();
-            }
-
-            // 3. 마감일: LocalDate -> String 변환
-            if (job.getDeadline() != null) {
-                deadlineVal = job.getDeadline().toString();
-            }
-        }
+        List<String> skills = parseSkills(resume);
+        String companyName = (job != null) ?
+                (userRepository.findById(job.getCompanyId()).map(User::getName).orElse("알 수 없음")) : "알 수 없음";
 
         return ApplyListResponse.builder()
                 .applyId(apply.getApplyId())
@@ -415,165 +245,43 @@ public class ApplyService {
                 .jobId(apply.getJobId())
                 .userName(user != null ? user.getName() : "알 수 없음")
                 .userAge(user != null ? user.getAge() : null)
-                // 진규 - 이력서 내역 확인 추가 (이 아래 3줄.)
-                // 위에서 안전하게 변환한 값을 넣습니다.
-                .companyName(companyNameVal)
-                .location(locationVal)
-                .deadline(deadlineVal)
+                .companyName(companyName)
+                .location(job != null ? job.getLocation() : "")
+                .deadline(job != null && job.getDeadline() != null ? job.getDeadline().toString() : "")
                 .jobTitle(job != null ? job.getTitle() : "알 수 없음")
                 .jobCategory(job != null ? job.getJobCategory() : "알 수 없음")
                 .skills(skills)
-                .experience(experience)
-                .status(apply.getStatus().name())
+                .experience("신입")
+                // ✅ getStatus() 대신 변환 메서드 사용 (에러 방지)
+                .status(convertToLegacyStatus(apply))
                 .aiScore(apply.getAiScore())
                 .appliedAt(apply.getAppliedAt())
-                // 기업 회원 면접 요청 여부 확인 - 지원자 목록에서
-                .interviewStatus(apply.getInterviewStatus())
+                .interviewStatus(null)
                 .build();
     }
 
     private ApplyResponse convertToDetailResponse(Apply apply) {
         User user = userRepository.findById(apply.getUserId()).orElse(null);
         JobPosting job = jobPostingRepository.findById(apply.getJobId()).orElse(null);
-        
-        // 이력서 정보 가져오기
         Resume resume = apply.getResumeId() != null ?
                 resumeRepository.findById(apply.getResumeId()).orElse(null) : null;
-        
-        // 기술 스택 파싱 (JSON 배열 또는 쉼표 구분 문자열)
-        List<String> skills = List.of();
-        if (resume != null && resume.getSkills() != null && !resume.getSkills().isEmpty()) {
-            try {
-                // JSON 배열로 파싱 시도
-                if (resume.getSkills().trim().startsWith("[")) {
-                    com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-                    skills = mapper.readValue(resume.getSkills(), 
-                            mapper.getTypeFactory().constructCollectionType(List.class, String.class));
-                } else {
-                    // 쉼표 구분 문자열로 파싱
-                    skills = Arrays.stream(resume.getSkills().split(","))
-                            .map(String::trim)
-                            .filter(s -> !s.isEmpty())
-                            .collect(Collectors.toList());
-                }
-            } catch (Exception e) {
-                log.warn("skills 파싱 실패, 쉼표 구분으로 재시도: {}", e.getMessage());
-                skills = Arrays.stream(resume.getSkills().split(","))
-                        .map(String::trim)
-                        .filter(s -> !s.isEmpty())
-                        .collect(Collectors.toList());
-            }
-        }
 
-        // structuredData에서 상세 정보 추출
-        String gender = null;
-        String birthDate = null;
-        String address = null;
-        String profileImage = null;
-        String coverLetterTitle = null;
-        String coverLetterContent = null;
-        String experience = "신입"; // 기본값
-        
-        List<ApplyResponse.ExperienceItem> experiences = new java.util.ArrayList<>();
-        List<ApplyResponse.CertificateItem> certificates = new java.util.ArrayList<>();
-        List<ApplyResponse.EducationItem> educations = new java.util.ArrayList<>();
-        List<ApplyResponse.CareerItem> careers = new java.util.ArrayList<>();
-        
+        List<String> skills = parseSkills(resume);
+
+        String gender = null, birthDate = null, address = null, profileImage = null;
+
         if (resume != null && resume.getStructuredData() != null) {
             try {
                 com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
                 com.fasterxml.jackson.databind.JsonNode root = mapper.readTree(resume.getStructuredData());
-                
-                // 인적사항 정보 추출
                 if (root.has("personalInfo")) {
-                    com.fasterxml.jackson.databind.JsonNode personalInfo = root.get("personalInfo");
-                    if (personalInfo.has("gender")) {
-                        gender = personalInfo.get("gender").asText();
-                    }
-                    if (personalInfo.has("birthDate")) {
-                        birthDate = personalInfo.get("birthDate").asText();
-                    }
-                    if (personalInfo.has("address")) {
-                        address = personalInfo.get("address").asText();
-                    }
-                    if (personalInfo.has("profileImage")) {
-                        profileImage = personalInfo.get("profileImage").asText();
-                    }
+                    com.fasterxml.jackson.databind.JsonNode p = root.get("personalInfo");
+                    if (p.has("gender")) gender = p.get("gender").asText();
+                    if (p.has("birthDate")) birthDate = p.get("birthDate").asText();
+                    if (p.has("address")) address = p.get("address").asText();
+                    if (p.has("profileImage")) profileImage = p.get("profileImage").asText();
                 }
-                
-                // 경험/활동/교육 정보 추출
-                if (root.has("experiences")) {
-                    com.fasterxml.jackson.databind.JsonNode experiencesNode = root.get("experiences");
-                    for (com.fasterxml.jackson.databind.JsonNode exp : experiencesNode) {
-                        if (exp.has("title") && exp.has("period")) {
-                            experiences.add(ApplyResponse.ExperienceItem.builder()
-                                    .title(exp.get("title").asText())
-                                    .period(exp.get("period").asText())
-                                    .build());
-                        }
-                    }
-                }
-                
-                // 자격증/어학/수상 정보 추출
-                if (root.has("certificates")) {
-                    com.fasterxml.jackson.databind.JsonNode certificatesNode = root.get("certificates");
-                    for (com.fasterxml.jackson.databind.JsonNode cert : certificatesNode) {
-                        if (cert.has("title") && cert.has("date")) {
-                            certificates.add(ApplyResponse.CertificateItem.builder()
-                                    .title(cert.get("title").asText())
-                                    .date(cert.get("date").asText())
-                                    .build());
-                        }
-                    }
-                }
-                
-                // 학력 정보 추출
-                if (root.has("educations")) {
-                    com.fasterxml.jackson.databind.JsonNode educationsNode = root.get("educations");
-                    for (com.fasterxml.jackson.databind.JsonNode edu : educationsNode) {
-                        if (edu.has("school") && edu.has("period")) {
-                            educations.add(ApplyResponse.EducationItem.builder()
-                                    .school(edu.get("school").asText())
-                                    .period(edu.get("period").asText())
-                                    .build());
-                        }
-                    }
-                }
-                
-                // 경력 정보 추출 및 경력 년수 계산
-                if (root.has("careers")) {
-                    com.fasterxml.jackson.databind.JsonNode careersNode = root.get("careers");
-                    if (careersNode.isArray() && careersNode.size() > 0) {
-                        int totalMonths = 0;
-                        for (com.fasterxml.jackson.databind.JsonNode career : careersNode) {
-                            if (career.has("company") && career.has("period")) {
-                                careers.add(ApplyResponse.CareerItem.builder()
-                                        .company(career.get("company").asText())
-                                        .period(career.get("period").asText())
-                                        .build());
-                                
-                                String period = career.get("period").asText();
-                                totalMonths += parsePeriodToMonths(period);
-                            }
-                        }
-                        int years = totalMonths / 12;
-                        experience = years > 0 ? years + "년" : "신입";
-                    }
-                }
-                
-                // 자기소개서 정보 추출
-                if (root.has("coverLetter")) {
-                    com.fasterxml.jackson.databind.JsonNode coverLetter = root.get("coverLetter");
-                    if (coverLetter.has("title")) {
-                        coverLetterTitle = coverLetter.get("title").asText();
-                    }
-                    if (coverLetter.has("content")) {
-                        coverLetterContent = coverLetter.get("content").asText();
-                    }
-                }
-            } catch (Exception e) {
-                log.warn("이력서 structuredData 파싱 실패: {}", e.getMessage());
-            }
+            } catch (Exception e) {}
         }
 
         return ApplyResponse.builder()
@@ -584,28 +292,13 @@ public class ApplyService {
                 .coverLetterId(apply.getCoverLetterId())
                 .userName(user != null ? user.getName() : "알 수 없음")
                 .userAge(user != null ? user.getAge() : null)
-                .userEmail(user != null ? user.getEmail() : null)
-                .userPhone(user != null ? user.getPhone() : null)
                 .jobTitle(job != null ? job.getTitle() : "알 수 없음")
                 .jobCategory(job != null ? job.getJobCategory() : "알 수 없음")
-                // 이력서 인적사항
                 .resumeTitle(resume != null ? resume.getTitle() : null)
-                .gender(gender)
-                .birthDate(birthDate)
-                .address(address)
-                .profileImage(profileImage)
-                // 이력서 스킬 및 경력
-                .skills(skills)
-                .experience(experience)
-                // 이력서 상세 정보
-                .experiences(experiences)
-                .certificates(certificates)
-                .educations(educations)
-                .careers(careers)
-                // 자기소개서 정보
-                .coverLetterTitle(coverLetterTitle)
-                .coverLetterContent(coverLetterContent)
-                .status(apply.getStatus().name())
+                .gender(gender).birthDate(birthDate).address(address).profileImage(profileImage)
+                .skills(skills).experience("신입")
+                // ✅ getStatus() 대신 변환 메서드 사용 (에러 방지)
+                .status(convertToLegacyStatus(apply))
                 .aiScore(apply.getAiScore())
                 .notes(apply.getNotes())
                 .appliedAt(apply.getAppliedAt())
@@ -613,33 +306,16 @@ public class ApplyService {
                 .updatedAt(apply.getUpdatedAt())
                 .build();
     }
-    
-    // 기간 문자열을 개월수로 변환
-    private int parsePeriodToMonths(String period) {
+
+    private List<String> parseSkills(Resume resume) {
+        if (resume == null || resume.getSkills() == null || resume.getSkills().isEmpty()) return List.of();
         try {
-            // "2019.2 ~ 2023.5" 형식 파싱
-            String[] parts = period.split("~");
-            if (parts.length != 2) return 0;
-            
-            String start = parts[0].trim().replace(" ", "");
-            String end = parts[1].trim().replace(" ", "");
-            
-            // "2019.2" -> [2019, 2]
-            String[] startParts = start.split("\\.");
-            String[] endParts = end.split("\\.");
-
-
-            if (startParts.length >= 2 && endParts.length >= 2) {
-                int startYear = Integer.parseInt(startParts[0]);
-                int startMonth = Integer.parseInt(startParts[1]);
-                int endYear = Integer.parseInt(endParts[0]);
-                int endMonth = Integer.parseInt(endParts[1]);
-                
-                return (endYear - startYear) * 12 + (endMonth - startMonth);
+            if (resume.getSkills().trim().startsWith("[")) {
+                return new com.fasterxml.jackson.databind.ObjectMapper().readValue(resume.getSkills(),
+                        new com.fasterxml.jackson.core.type.TypeReference<List<String>>(){});
+            } else {
+                return Arrays.stream(resume.getSkills().split(",")).map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList());
             }
-        } catch (Exception e) {
-            log.warn("기간 파싱 실패: {}", period);
-        }
-        return 0;
+        } catch (Exception e) { return List.of(); }
     }
 }

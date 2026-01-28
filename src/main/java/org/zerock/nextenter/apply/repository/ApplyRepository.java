@@ -44,11 +44,23 @@ public interface ApplyRepository extends JpaRepository<Apply, Long> {
     // 사용자의 모든 지원 내역
     List<Apply> findByUserIdOrderByAppliedAtDesc(Long userId);
 
-    // 상태별 지원자 수
+    // ✅ 서류 상태별 지원자 수
     @Query("SELECT COUNT(a) FROM Apply a " +
             "JOIN JobPosting j ON a.jobId = j.jobId " +
-            "WHERE j.companyId = :companyId AND a.status = :status")
-    Long countByCompanyIdAndStatus(@Param("companyId") Long companyId, @Param("status") Apply.Status status);
+            "WHERE j.companyId = :companyId AND a.documentStatus = :documentStatus")
+    Long countByCompanyIdAndDocumentStatus(
+            @Param("companyId") Long companyId, 
+            @Param("documentStatus") Apply.DocumentStatus documentStatus
+    );
+    
+    // ✅ 최종 결과별 지원자 수
+    @Query("SELECT COUNT(a) FROM Apply a " +
+            "JOIN JobPosting j ON a.jobId = j.jobId " +
+            "WHERE j.companyId = :companyId AND a.finalStatus = :finalStatus")
+    Long countByCompanyIdAndFinalStatus(
+            @Param("companyId") Long companyId, 
+            @Param("finalStatus") Apply.FinalStatus finalStatus
+    );
     
     // 특정 공고의 지원자 수
     @Query("SELECT COUNT(a) FROM Apply a WHERE a.jobId = :jobId")

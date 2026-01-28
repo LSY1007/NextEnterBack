@@ -30,10 +30,16 @@ public class Apply {
     @Column(name = "cover_letter_id")
     private Long coverLetterId;
 
+    // ✅ 서류 상태 (기존 status 대체)
     @Builder.Default
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
-    private Status status = Status.PENDING;
+    @Column(name = "document_status", nullable = false, length = 20)
+    private DocumentStatus documentStatus = DocumentStatus.PENDING;
+
+    // ✅ 최종 결과 (서류 합격 후)
+    @Enumerated(EnumType.STRING)
+    @Column(name = "final_status", length = 20)
+    private FinalStatus finalStatus;
 
     @Column(name = "ai_score")
     private Integer aiScore; // AI 매칭 점수 (0-100)
@@ -50,23 +56,28 @@ public class Apply {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    @Column(name = "interview_status", length = 20)
-    private String interviewStatus; // REQUESTED, ACCEPTED, REJECTED
+    // ✅ 서류 상태 Enum
+    public enum DocumentStatus {
+        PENDING,    // 서류 검토 대기
+        REVIEWING,  // 서류 검토 중
+        PASSED,     // 서류 합격
+        REJECTED,    // 서류 불합격
+        CANCELED    // 지원 취소
+    }
 
-    public enum Status {
-        PENDING,   // 검토중
-        REVIEWING, // 서류 검토중
-        ACCEPTED,  // 합격
-        REJECTED,  // 불합격
-        CANCELED   // 지원 취소
+    // ✅ 최종 결과 Enum
+    public enum FinalStatus {
+        PASSED,     // 최종 합격
+        REJECTED,   // 최종 불합격
+        CANCELED    // 지원 취소
     }
 
     @PrePersist
     protected void onCreate() {
         this.appliedAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
-        if (this.status == null) {
-            this.status = Status.PENDING;
+        if (this.documentStatus == null) {
+            this.documentStatus = DocumentStatus.PENDING;
         }
     }
 

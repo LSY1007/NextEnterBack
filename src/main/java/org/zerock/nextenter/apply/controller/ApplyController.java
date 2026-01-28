@@ -176,4 +176,16 @@ public class ApplyController {
 
         return ResponseEntity.ok(applies);
     }
+
+    // ✅ [추가됨] 지원 취소 API
+    @Operation(summary = "지원 취소", description = "개인회원이 지원을 취소합니다")
+    @PatchMapping("/{applyId}/cancel")
+    public ResponseEntity<Void> cancelApply(
+            @Parameter(description = "지원 ID", required = true) @PathVariable Long applyId,
+            @Parameter(description = "사용자 ID", required = true) @RequestHeader("userId") Long userId
+    ) {
+        log.info("PATCH /api/applies/{}/cancel - userId: {}", applyId, userId);
+        applyService.cancelApply(userId, applyId);
+        return ResponseEntity.ok().build();
+    }
 }

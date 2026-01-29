@@ -60,7 +60,7 @@ public class JWTCheckFilter extends OncePerRequestFilter {
             log.info("JWT 인증 성공: email={}", email);
 
         } catch (Exception e) {
-            log.error("JWT 인증 실패: {}", e.getMessage());
+            log.error("JWT 인증 실패: {} - {}", e.getClass().getSimpleName(), e.getMessage());
         }
 
         filterChain.doFilter(request, response);

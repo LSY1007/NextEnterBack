@@ -40,7 +40,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
                 claims.put("name", oAuth2User.getName()); // ✅ name도 JWT에 포함
                 claims.put("type", "USER");
 
-                String token = JWTUtil.generateToken(claims, 60);
+                String token = JWTUtil.generateToken(claims, 1440);
 
                 // ✅ URL 인코딩 추가
                 String encodedEmail = URLEncoder.encode(oAuth2User.getEmail(), StandardCharsets.UTF_8);

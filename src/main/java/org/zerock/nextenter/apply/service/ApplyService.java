@@ -36,6 +36,7 @@ public class ApplyService {
     private final JobPostingRepository jobPostingRepository;
     private final ResumeRepository resumeRepository;
     private final org.zerock.nextenter.notification.NotificationService notificationService;
+    private final org.zerock.nextenter.coverletter.repository.CoverLetterRepository coverLetterRepository;
 
     @Deprecated
     @Transactional
@@ -268,20 +269,45 @@ public class ApplyService {
 
         List<String> skills = parseSkills(resume);
 
-        String gender = null, birthDate = null, address = null, profileImage = null;
+        // ✅ Resume 테이블의 개인정보 컴럼에서 직접 가져오기
+        String resumeName = resume != null ? resume.getResumeName() : null;
+        String gender = resume != null ? resume.getResumeGender() : null;
+        String birthDate = resume != null ? resume.getResumeBirthDate() : null;
+        String email = resume != null ? resume.getResumeEmail() : null;
+        String phone = resume != null ? resume.getResumePhone() : null;
+        String address = resume != null ? resume.getResumeAddress() : null;
+        String detailAddress = resume != null ? resume.getResumeDetailAddress() : null;
+        String profileImage = resume != null ? resume.getProfileImage() : null;
 
-        if (resume != null && resume.getStructuredData() != null) {
+        // 주소 합치기 (기본주소 + 상세주소)
+        String fullAddress = null;
+        if (address != null) {
+            fullAddress = address;
+            if (detailAddress != null && !detailAddress.isEmpty()) {
+                fullAddress += " " + detailAddress;
+            }
+        }
+
+        // ✅ 이력서 상세 정보 파싱 (experiences, certificates, educations, careers)
+        List<ApplyResponse.ExperienceItem> experiences = parseExperiences(resume);
+        List<ApplyResponse.CertificateItem> certificates = parseCertificates(resume);
+        List<ApplyResponse.EducationItem> educations = parseEducations(resume);
+        List<ApplyResponse.CareerItem> careers = parseCareers(resume);
+
+        // ✅ 자기소개서 정보 가져오기
+        String coverLetterTitle = null;
+        String coverLetterContent = null;
+        if (apply.getCoverLetterId() != null) {
             try {
-                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-                com.fasterxml.jackson.databind.JsonNode root = mapper.readTree(resume.getStructuredData());
-                if (root.has("personalInfo")) {
-                    com.fasterxml.jackson.databind.JsonNode p = root.get("personalInfo");
-                    if (p.has("gender")) gender = p.get("gender").asText();
-                    if (p.has("birthDate")) birthDate = p.get("birthDate").asText();
-                    if (p.has("address")) address = p.get("address").asText();
-                    if (p.has("profileImage")) profileImage = p.get("profileImage").asText();
+                org.zerock.nextenter.coverletter.entity.CoverLetter coverLetter = 
+                    coverLetterRepository.findById(apply.getCoverLetterId()).orElse(null);
+                if (coverLetter != null) {
+                    coverLetterTitle = coverLetter.getTitle();
+                    coverLetterContent = coverLetter.getContent();
                 }
-            } catch (Exception e) {}
+            } catch (Exception e) {
+                log.warn("⚠️ 자기소개서 조회 실패: {}", e.getMessage());
+            }
         }
 
         return ApplyResponse.builder()
@@ -292,12 +318,25 @@ public class ApplyService {
                 .coverLetterId(apply.getCoverLetterId())
                 .userName(user != null ? user.getName() : "알 수 없음")
                 .userAge(user != null ? user.getAge() : null)
+                .userEmail(email)
+                .userPhone(phone)
                 .jobTitle(job != null ? job.getTitle() : "알 수 없음")
                 .jobCategory(job != null ? job.getJobCategory() : "알 수 없음")
                 .resumeTitle(resume != null ? resume.getTitle() : null)
-                .gender(gender).birthDate(birthDate).address(address).profileImage(profileImage)
-                .skills(skills).experience("신입")
-                // ✅ getStatus() 대신 변환 메서드 사용 (에러 방지)
+                .gender(gender)
+                .birthDate(birthDate)
+                .address(fullAddress)
+                .profileImage(profileImage)
+                .skills(skills)
+                .experience("신입")
+                // ✅ 이력서 상세 정보 추가
+                .experiences(experiences)
+                .certificates(certificates)
+                .educations(educations)
+                .careers(careers)
+                // ✅ 자기소개서 정보 추가
+                .coverLetterTitle(coverLetterTitle)
+                .coverLetterContent(coverLetterContent)
                 .status(convertToLegacyStatus(apply))
                 .aiScore(apply.getAiScore())
                 .notes(apply.getNotes())
@@ -317,5 +356,101 @@ public class ApplyService {
                 return Arrays.stream(resume.getSkills().split(",")).map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList());
             }
         } catch (Exception e) { return List.of(); }
+    }
+
+    // ✅ 경험/활동/교육 파싱
+    private List<ApplyResponse.ExperienceItem> parseExperiences(Resume resume) {
+        if (resume == null || resume.getExperiences() == null || resume.getExperiences().isEmpty()) {
+            return List.of();
+        }
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.JsonNode array = mapper.readTree(resume.getExperiences());
+            List<ApplyResponse.ExperienceItem> result = new java.util.ArrayList<>();
+            for (com.fasterxml.jackson.databind.JsonNode node : array) {
+                String title = node.has("title") ? node.get("title").asText() : "";
+                String period = node.has("period") ? node.get("period").asText() : "";
+                result.add(ApplyResponse.ExperienceItem.builder()
+                        .title(title)
+                        .period(period)
+                        .build());
+            }
+            return result;
+        } catch (Exception e) {
+            log.warn("경험/활동/교육 파싱 실패: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    // ✅ 자격증/어학/수상 파싱
+    private List<ApplyResponse.CertificateItem> parseCertificates(Resume resume) {
+        if (resume == null || resume.getCertificates() == null || resume.getCertificates().isEmpty()) {
+            return List.of();
+        }
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.JsonNode array = mapper.readTree(resume.getCertificates());
+            List<ApplyResponse.CertificateItem> result = new java.util.ArrayList<>();
+            for (com.fasterxml.jackson.databind.JsonNode node : array) {
+                String title = node.has("title") ? node.get("title").asText() : "";
+                String date = node.has("date") ? node.get("date").asText() : "";
+                result.add(ApplyResponse.CertificateItem.builder()
+                        .title(title)
+                        .date(date)
+                        .build());
+            }
+            return result;
+        } catch (Exception e) {
+            log.warn("자격증/어학/수상 파싱 실패: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    // ✅ 학력 파싱
+    private List<ApplyResponse.EducationItem> parseEducations(Resume resume) {
+        if (resume == null || resume.getEducations() == null || resume.getEducations().isEmpty()) {
+            return List.of();
+        }
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.JsonNode array = mapper.readTree(resume.getEducations());
+            List<ApplyResponse.EducationItem> result = new java.util.ArrayList<>();
+            for (com.fasterxml.jackson.databind.JsonNode node : array) {
+                String school = node.has("school") ? node.get("school").asText() : "";
+                String period = node.has("period") ? node.get("period").asText() : "";
+                result.add(ApplyResponse.EducationItem.builder()
+                        .school(school)
+                        .period(period)
+                        .build());
+            }
+            return result;
+        } catch (Exception e) {
+            log.warn("학력 파싱 실패: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    // ✅ 경력 파싱
+    private List<ApplyResponse.CareerItem> parseCareers(Resume resume) {
+        if (resume == null || resume.getCareers() == null || resume.getCareers().isEmpty()) {
+            return List.of();
+        }
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.JsonNode array = mapper.readTree(resume.getCareers());
+            List<ApplyResponse.CareerItem> result = new java.util.ArrayList<>();
+            for (com.fasterxml.jackson.databind.JsonNode node : array) {
+                String company = node.has("company") ? node.get("company").asText() : "";
+                String period = node.has("period") ? node.get("period").asText() : "";
+                result.add(ApplyResponse.CareerItem.builder()
+                        .company(company)
+                        .period(period)
+                        .build());
+            }
+            return result;
+        } catch (Exception e) {
+            log.warn("경력 파싱 실패: {}", e.getMessage());
+            return List.of();
+        }
     }
 }

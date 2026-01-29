@@ -150,6 +150,10 @@ public class ResumeService {
     public ResumeResponse createResume(ResumeRequest request, Long userId) {
         log.info("이력서 생성 - userId: {}, title: {}", userId, request.getTitle());
 
+        // ✅ [추가] 프론트에서 넘어오는 값 확인 로그
+        log.info("createResume personalInfo - resumeAddress={}, resumeDetailAddress={}",
+                request.getResumeAddress(), request.getResumeDetailAddress());
+
         // visibility 처리
         Resume.Visibility visibility = Resume.Visibility.PUBLIC;
         if (request.getVisibility() != null) {
@@ -202,6 +206,10 @@ public class ResumeService {
     @Transactional
     public ResumeResponse updateResume(Long resumeId, ResumeRequest request, Long userId) {
         log.info("이력서 수정 - resumeId: {}, userId: {}", resumeId, userId);
+
+        // ✅ [추가] 프론트에서 넘어오는 값 확인 로그
+        log.info("updateResume personalInfo - resumeAddress={}, resumeDetailAddress={}",
+                request.getResumeAddress(), request.getResumeDetailAddress());
 
         Resume resume = resumeRepository
                 .findByResumeIdAndUserIdAndDeletedAtIsNull(resumeId, userId)
@@ -280,7 +288,7 @@ public class ResumeService {
         }
 
         resume = resumeRepository.save(resume);
-        log.info("이력서 수정 완료 - resumeId: {}", resume.getResumeId());
+        log.info("이력서 수정 완료 - resumeId: {}", resumeId);
 
         return convertToResponse(resume);
     }
@@ -446,10 +454,10 @@ public class ResumeService {
 
         // ✅ 포트폴리오 목록 조회
         List<Portfolio> portfolios = portfolioRepository.findByResumeIdOrderByDisplayOrder(resume.getResumeId());
-        
+
         // ✅ 자기소개서 목록 조회 (이 이력서와 연결된 자기소개서들만)
         List<CoverLetter> coverLetters = coverLetterRepository.findByResumeIdOrderByCreatedAtDesc(resume.getResumeId());
-        
+
         ResumeResponse.ResumeResponseBuilder builder = ResumeResponse.builder()
                 .resumeId(resume.getResumeId())
                 .title(resume.getTitle())

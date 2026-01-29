@@ -20,3 +20,5 @@ lombok.config
 
 # Security Config (로컬 전용)
 src/main/java/org/zerock/nextenter/config/SecurityConfig.java
+
+src/main/resources/application.properties

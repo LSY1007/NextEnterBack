@@ -56,9 +56,13 @@ public class InterviewService {
                 // 2. 이력서 조회 (AOP Context 사용)
                 Resume resume = InterviewContextHolder.getResume();
                 if (resume == null || !resume.getResumeId().equals(request.getResumeId())) {
+                        log.error("Resume Context Error: contextResume={}, requestResumeId={}", 
+                            resume != null ? resume.getResumeId() : "null", 
+                            request.getResumeId());
                         // Fallback check (Should be handled by AOP)
-                        throw new IllegalStateException("이력서 컨텍스트 초기화 실패");
+                        throw new IllegalStateException("이력서 컨텍스트 초기화 실패: Resume is null or verification failed");
                 }
+                log.info("Resume Context Verified: resumeId={}", resume.getResumeId());
 
                 // 3. Difficulty 유효성 검증
                 Difficulty difficulty;
@@ -81,7 +85,7 @@ public class InterviewService {
                                 .build();
 
                 interviewRepository.save(interview);
-                log.info("면접 시작: interviewId={}, userId={}, jobCategory={}",
+                log.info("면접 세션 생성 완료: interviewId={}, userId={}, jobCategory={}",
                                 interview.getInterviewId(), userId, request.getJobCategory());
 
                 java.util.Map<String, Object> finalResumeContent;
@@ -111,8 +115,25 @@ public class InterviewService {
                                 .portfolioFiles(finalPortfolioFiles) // 파일 경로 전달
                                 .portfolio(request.getPortfolio()) // 포트폴리오 메타데이터 전달
                                 .build();
+                
+                log.info("AI Server 요청 준비: targetRole={}, resumeId={}", aiRequest.getTargetRole(), resume.getResumeId());
 
-                AiInterviewResponse aiResponse = aiInterviewClient.getNextQuestion(aiRequest);
+                AiInterviewResponse aiResponse;
+                try {
+                    aiResponse = aiInterviewClient.getNextQuestion(aiRequest);
+                    log.info("AI Server 응답 성공");
+                } catch (Exception e) {
+                    log.error("AI Server 연동 실패", e);
+                    // DEBUG: Write to file
+                    try (java.io.PrintWriter pw = new java.io.PrintWriter(new java.io.FileWriter("error_log.txt", true))) {
+                        pw.println("Timestamp: " + java.time.LocalDateTime.now());
+                        e.printStackTrace(pw);
+                    } catch (java.io.IOException ioe) {
+                        ioe.printStackTrace();
+                    }
+                    throw new RuntimeException("AI 서버 연동 실패: " + e.getMessage());
+                }
+                
                 String firstQuestion = aiResponse.getRealtime().getNextQuestion();
 
                 // 6. 첫 질문 저장
@@ -127,6 +148,7 @@ public class InterviewService {
 
                 interview.incrementTurn();
                 interviewRepository.save(interview);
+                log.info("면접 시작 프로세스 완료: interviewId={}, firstQuestion={}", interview.getInterviewId(), firstQuestion);
 
                 return InterviewQuestionResponse.builder()
                                 .interviewId(interview.getInterviewId())
@@ -202,6 +224,13 @@ public class InterviewService {
                                 .portfolioFiles(finalPortfolioFiles)
                                 .portfolio(request.getPortfolio())
                                 .build();
+                
+                // Debug Log
+                try {
+                    log.info("🚀 [Backend Debug] Sending AI Request: {}", objectMapper.writeValueAsString(aiRequest));
+                } catch(Exception e) {
+                    log.error("Failed to log AI Request", e);
+                }
 
                 AiInterviewResponse aiResponse = aiInterviewClient.getNextQuestion(aiRequest);
                 String nextQuestion = aiResponse.getRealtime().getNextQuestion();
@@ -281,6 +310,7 @@ public class InterviewService {
          */
         @Transactional
         public InterviewQuestionResponse modifyAnswer(Long userId, InterviewMessageRequest request) {
+                log.info("답변 수정 요청: userId={}, interviewId={}", userId, request.getInterviewId());
                 // 1. 면접 세션 조회
                 Interview interview = interviewRepository.findByInterviewIdAndUserId(request.getInterviewId(), userId)
                                 .orElseThrow(() -> new IllegalArgumentException("면접을 찾을 수 없습니다"));

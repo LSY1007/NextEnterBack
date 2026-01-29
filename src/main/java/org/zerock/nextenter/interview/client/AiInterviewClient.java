@@ -1,6 +1,7 @@
 package org.zerock.nextenter.interview.client;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -19,6 +20,7 @@ import java.util.Map;
 public class AiInterviewClient {
 
     private final RestClient restClient;
+    private final ObjectMapper objectMapper;
 
     // PII Regex Patterns (Interview Xpert & Security best practices)
     // 주민등록번호, 전화번호, 이메일, 주소 등을 마스킹
@@ -26,11 +28,12 @@ public class AiInterviewClient {
     private static final String EMAIL_REGEX = "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,6}";
     private static final String RRN_REGEX = "\\d{6}-[1-4]\\d{6}"; // Simple RRN check
 
-    public AiInterviewClient(@Value("${ai.server.url}") String aiServerUrl) {
+    public AiInterviewClient(@Value("${ai.server.url}") String aiServerUrl, ObjectMapper objectMapper) {
         log.info("AI Server URL: {}", aiServerUrl);
         this.restClient = RestClient.builder()
                 .baseUrl(aiServerUrl)
                 .build();
+        this.objectMapper = objectMapper;
     }
 
     public AiInterviewResponse getNextQuestion(AiInterviewRequest request) {
@@ -39,7 +42,6 @@ public class AiInterviewClient {
         request.setLastAnswer(maskedAnswer);
 
         // 2. STAR Technique Enforcement (Conversate)
-        // 시스템에 STAR 구조를 강제하도록 힌트를 전달 (백엔드 지원 필요하지만, 우선 요청에 포함)
         request.setSystemInstruction(
                 "Please provide feedback based on the STAR (Situation, Task, Action, Result) technique. If the answer lacks specific actions or results, ask follow-up questions to clarify.");
 
@@ -48,10 +50,14 @@ public class AiInterviewClient {
                 request.getLastAnswer() != null ? "Present (Masked)" : "Null (Start)");
 
         try {
+            // Debugging: Convert to JSON to see exactly what is being sent
+            String jsonBody = objectMapper.writeValueAsString(request);
+            log.debug("Sending JSON Body: {}", jsonBody);
+
             return restClient.post()
                     .uri("/interview/next")
                     .contentType(MediaType.APPLICATION_JSON)
-                    .body(request)
+                    .body(jsonBody) // Send the String directly to ensure control over serialization
                     .retrieve()
                     .body(AiInterviewResponse.class);
         } catch (Exception e) {

@@ -17,6 +17,17 @@ public class ResumeRequest {
 
     private String jobCategory;
 
+    // ===== 개인정보 필드들 =====
+    
+    private String resumeName; // 이름
+    private String resumeGender; // 성별
+    private String resumeBirthDate; // 생년월일
+    private String resumeEmail; // 이메일
+    private String resumePhone; // 연락처
+    private String resumeAddress; // 주소
+    private String resumeDetailAddress; // 상세주소
+    private String profileImage; // 프로필 이미지 (Base64)
+
     // ===== 분리된 섹션들 (JSON 문자열로 전달) =====
 
     // 경험/활동/교육 JSON 문자열

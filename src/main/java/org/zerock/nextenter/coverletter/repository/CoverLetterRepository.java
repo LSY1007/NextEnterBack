@@ -20,4 +20,7 @@ public interface CoverLetterRepository extends JpaRepository<CoverLetter, Long> 
     Long countByUserId(Long userId);
 
     List<CoverLetter> findByUserIdOrderByCreatedAtDesc(Long userId);
+
+    // ✅ 특정 이력서의 자기소개서 조회
+    List<CoverLetter> findByResumeIdOrderByCreatedAtDesc(Long resumeId);
 }

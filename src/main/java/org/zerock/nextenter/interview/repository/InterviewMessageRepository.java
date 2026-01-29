@@ -17,4 +17,12 @@ public interface InterviewMessageRepository extends JpaRepository<InterviewMessa
 
     // 특정 면접의 메시지 개수
     Long countByInterviewId(Long interviewId);
+
+    // 특정 턴, 특정 역할의 메시지 조회 (Optional 반환이 좋으나 기존 패턴 따름 - But Service uses orElseThrow
+    // so Optional is needed)
+    // Looking at Service:
+    // interviewMessageRepository.findByInterviewIdAndTurnNumberAndRole(...).orElseThrow(...)
+    // So it MUST return Optional.
+    java.util.Optional<InterviewMessage> findByInterviewIdAndTurnNumberAndRole(Long interviewId, Integer turnNumber,
+            InterviewMessage.Role role);
 }

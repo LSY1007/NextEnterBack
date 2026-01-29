@@ -113,4 +113,20 @@ public class InterviewOfferController {
 
         return ResponseEntity.ok(offer);
     }
+
+    @Operation(summary = "특정 인재에게 제안한 공고 ID 목록", description = "기업이 특정 인재에게 이미 제안한 공고 ID 목록")
+    @GetMapping("/company/offered-jobs")
+    public ResponseEntity<List<Long>> getOfferedJobIds(
+            @Parameter(description = "기업 ID", required = true)
+            @RequestHeader("companyId") Long companyId,
+
+            @Parameter(description = "인재 사용자 ID", required = true)
+            @RequestParam Long userId
+    ) {
+        log.info("GET /api/interview-offers/company/offered-jobs - companyId: {}, userId: {}", companyId, userId);
+
+        List<Long> offeredJobIds = interviewOfferService.getOfferedJobIds(companyId, userId);
+
+        return ResponseEntity.ok(offeredJobIds);
+    }
 }

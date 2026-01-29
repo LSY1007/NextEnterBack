@@ -1,11 +1,6 @@
 package org.zerock.nextenter.interviewoffer.controller;
 
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.zerock.nextenter.interviewoffer.dto.InterviewOfferRequest;
@@ -14,119 +9,90 @@ import org.zerock.nextenter.interviewoffer.service.InterviewOfferService;
 
 import java.util.List;
 
-@Tag(name = "Interview Offer", description = "면접 제안 관리 API")
 @RestController
 @RequestMapping("/api/interview-offers")
 @RequiredArgsConstructor
-@Slf4j
 public class InterviewOfferController {
 
     private final InterviewOfferService interviewOfferService;
 
-    @Operation(summary = "면접 제안 생성", description = "기업이 인재검색에서 면접을 제안합니다")
+    // 1. 기업이 면접 제안 생성
     @PostMapping
     public ResponseEntity<InterviewOfferResponse> createOffer(
-            @Parameter(description = "기업 ID", required = true)
             @RequestHeader("companyId") Long companyId,
-
-            @Parameter(description = "면접 제안 요청 데이터", required = true)
             @RequestBody InterviewOfferRequest request
     ) {
-        log.info("POST /api/interview-offers - companyId: {}, userId: {}, jobId: {}",
-                companyId, request.getUserId(), request.getJobId());
-
-        InterviewOfferResponse offer = interviewOfferService.createOffer(companyId, request);
-
-        return ResponseEntity.status(HttpStatus.CREATED).body(offer);
+        return ResponseEntity.ok(interviewOfferService.createOffer(companyId, request));
     }
 
-    @Operation(summary = "받은 제안 목록 조회", description = "사용자가 받은 면접 제안 목록 (OFFERED 상태만)")
+    // 2. 사용자가 받은 면접 제안 목록 (OFFERED 상태만)
     @GetMapping("/received")
-    public ResponseEntity<List<InterviewOfferResponse>> getReceivedOffers(
-            @Parameter(description = "사용자 ID", required = true)
-            @RequestHeader("userId") Long userId
-    ) {
-        log.info("GET /api/interview-offers/received - userId: {}", userId);
-
-        List<InterviewOfferResponse> offers = interviewOfferService.getReceivedOffers(userId);
-
-        return ResponseEntity.ok(offers);
+    public ResponseEntity<List<InterviewOfferResponse>> getReceivedOffers(@RequestHeader("userId") Long userId) {
+        return ResponseEntity.ok(interviewOfferService.getReceivedOffers(userId));
     }
 
-    @Operation(summary = "내 모든 면접 제안 조회", description = "사용자의 모든 면접 제안 내역")
+    // 3. 사용자의 모든 면접 제안 조회 (deleted 필터 포함)
     @GetMapping("/my")
     public ResponseEntity<List<InterviewOfferResponse>> getMyOffers(
-            @Parameter(description = "사용자 ID", required = true)
-            @RequestHeader("userId") Long userId
+            @RequestHeader("userId") Long userId,
+            @RequestParam(required = false) Boolean includeDeleted
     ) {
-        log.info("GET /api/interview-offers/my - userId: {}", userId);
-
-        List<InterviewOfferResponse> offers = interviewOfferService.getMyOffers(userId);
-
-        return ResponseEntity.ok(offers);
+        return ResponseEntity.ok(interviewOfferService.getMyOffers(userId, includeDeleted));
     }
 
-    @Operation(summary = "기업의 면접 제안 조회", description = "기업이 보낸 면접 제안 목록")
+    // 4. 기업의 면접 제안 목록
     @GetMapping("/company")
     public ResponseEntity<List<InterviewOfferResponse>> getCompanyOffers(
-            @Parameter(description = "기업 ID", required = true)
             @RequestHeader("companyId") Long companyId,
-
-            @Parameter(description = "공고 ID (특정 공고만 조회)")
             @RequestParam(required = false) Long jobId
     ) {
-        log.info("GET /api/interview-offers/company - companyId: {}, jobId: {}", companyId, jobId);
-
-        List<InterviewOfferResponse> offers = interviewOfferService.getCompanyOffers(companyId, jobId);
-
-        return ResponseEntity.ok(offers);
+        return ResponseEntity.ok(interviewOfferService.getCompanyOffers(companyId, jobId));
     }
 
-    @Operation(summary = "면접 제안 수락", description = "사용자가 받은 면접 제안을 수락합니다")
+    // 5. 면접 제안 수락
     @PostMapping("/{offerId}/accept")
     public ResponseEntity<InterviewOfferResponse> acceptOffer(
-            @Parameter(description = "제안 ID", required = true)
             @PathVariable Long offerId,
-
-            @Parameter(description = "사용자 ID", required = true)
             @RequestHeader("userId") Long userId
     ) {
-        log.info("POST /api/interview-offers/{}/accept - userId: {}", offerId, userId);
-
-        InterviewOfferResponse offer = interviewOfferService.acceptOffer(offerId, userId);
-
-        return ResponseEntity.ok(offer);
+        return ResponseEntity.ok(interviewOfferService.acceptOffer(offerId, userId));
     }
 
-    @Operation(summary = "면접 제안 거절", description = "사용자가 받은 면접 제안을 거절합니다")
+    // 6. 면접 제안 거절
     @PostMapping("/{offerId}/reject")
     public ResponseEntity<InterviewOfferResponse> rejectOffer(
-            @Parameter(description = "제안 ID", required = true)
             @PathVariable Long offerId,
-
-            @Parameter(description = "사용자 ID", required = true)
             @RequestHeader("userId") Long userId
     ) {
-        log.info("POST /api/interview-offers/{}/reject - userId: {}", offerId, userId);
-
-        InterviewOfferResponse offer = interviewOfferService.rejectOffer(offerId, userId);
-
-        return ResponseEntity.ok(offer);
+        return ResponseEntity.ok(interviewOfferService.rejectOffer(offerId, userId));
     }
 
-    @Operation(summary = "특정 인재에게 제안한 공고 ID 목록", description = "기업이 특정 인재에게 이미 제안한 공고 ID 목록")
+    // 7. 면접 제안 단일 삭제
+    @DeleteMapping("/{offerId}")
+    public ResponseEntity<Void> deleteOffer(
+            @PathVariable Long offerId,
+            @RequestHeader("userId") Long userId
+    ) {
+        interviewOfferService.deleteOffer(offerId, userId);
+        return ResponseEntity.ok().build();
+    }
+
+    // ✅ [추가됨] 면접 제안 일괄 삭제
+    @DeleteMapping("/bulk")
+    public ResponseEntity<Void> deleteOffers(
+            @RequestBody List<Long> offerIds,
+            @RequestHeader("userId") Long userId
+    ) {
+        interviewOfferService.deleteOffers(offerIds, userId);
+        return ResponseEntity.ok().build();
+    }
+
+    // 8. 제안한 공고 ID 목록
     @GetMapping("/company/offered-jobs")
     public ResponseEntity<List<Long>> getOfferedJobIds(
-            @Parameter(description = "기업 ID", required = true)
             @RequestHeader("companyId") Long companyId,
-
-            @Parameter(description = "인재 사용자 ID", required = true)
             @RequestParam Long userId
     ) {
-        log.info("GET /api/interview-offers/company/offered-jobs - companyId: {}, userId: {}", companyId, userId);
-
-        List<Long> offeredJobIds = interviewOfferService.getOfferedJobIds(companyId, userId);
-
-        return ResponseEntity.ok(offeredJobIds);
+        return ResponseEntity.ok(interviewOfferService.getOfferedJobIds(companyId, userId));
     }
 }

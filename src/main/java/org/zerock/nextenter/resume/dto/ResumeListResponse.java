@@ -20,5 +20,6 @@ public class ResumeListResponse {
     private String visibility;
     private Integer viewCount;
     private String status;
+    private Boolean isIncomplete;  // 미완성 여부
     private LocalDateTime createdAt;
 }

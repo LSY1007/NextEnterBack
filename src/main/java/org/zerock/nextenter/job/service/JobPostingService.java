@@ -274,10 +274,11 @@ public class JobPostingService {
                 .title(jobPosting.getTitle())
                 .companyName(companyName)
                 .logoUrl(logoUrl)
-                .thumbnailUrl(jobPosting.getThumbnailUrl()) // 썸네일 URL 추가
+                .thumbnailUrl(jobPosting.getThumbnailUrl())
+                .detailImageUrl(jobPosting.getDetailImageUrl()) // ✅ 추가
                 .jobCategory(jobPosting.getJobCategory())
                 .location(jobPosting.getLocation())
-                .locationCity(jobPosting.getLocationCity()) // 시/도 정보 추가
+                .locationCity(jobPosting.getLocationCity())
                 .experienceMin(jobPosting.getExperienceMin())
                 .experienceMax(jobPosting.getExperienceMax())
                 .salaryMin(jobPosting.getSalaryMin())

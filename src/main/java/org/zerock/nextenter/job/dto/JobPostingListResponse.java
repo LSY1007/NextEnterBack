@@ -20,6 +20,7 @@ public class JobPostingListResponse {
     private String companyName;
     private String logoUrl;
     private String thumbnailUrl;
+    private String detailImageUrl; // ✅ 추가: 상세 이미지 URL
     private String jobCategory;
     private String location;
     private String locationCity; // 시/도 정보 (필터링용)

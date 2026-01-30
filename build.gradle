@@ -74,6 +74,7 @@ dependencies {
 
 tasks.named('test') {
     useJUnitPlatform()
+    jvmArgs "-Djdk.attach.allowAttachSelf=true"
 }
 
 // 컴파일 옵션

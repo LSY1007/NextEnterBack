@@ -10,7 +10,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.StringHttpMessageConverter;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClientResponseException;
+
 import org.springframework.web.client.RestTemplate;
 import org.zerock.nextenter.ai.resume.dto.AiRecommendRequest;
 import org.zerock.nextenter.ai.resume.dto.AiRecommendResponse;
@@ -39,7 +39,7 @@ public class ResumeAiService {
 
         // 1. 데이터 검증
         if (request == null || request.getResumeText() == null) {
-             throw new IllegalArgumentException("❌ 이력서 내용(resumeText)이 비어있습니다.");
+            throw new IllegalArgumentException("❌ 이력서 내용(resumeText)이 비어있습니다.");
         }
 
         try {
@@ -49,7 +49,7 @@ public class ResumeAiService {
 
             // 3. 데이터 준비 (위에서 수정한 DTO 로직 사용)
             Map<String, Object> aiRequestMap = request.toAiFormat();
-            
+
             // 4. JSON 문자열로 직접 변환 (눈으로 확인 가능)
             String jsonPayload = objectMapper.writeValueAsString(aiRequestMap);
             log.info("📦 [AI 전송 데이터]: {}", jsonPayload);
@@ -60,7 +60,7 @@ public class ResumeAiService {
             // 6. '순정' RestTemplate 생성 (설정 꼬임 방지)
             RestTemplate directRestTemplate = new RestTemplate();
             directRestTemplate.getMessageConverters()
-                .add(0, new StringHttpMessageConverter(StandardCharsets.UTF_8));
+                    .add(0, new StringHttpMessageConverter(StandardCharsets.UTF_8));
 
             // 7. 전송
             ResponseEntity<String> responseEntity = directRestTemplate.postForEntity(url, requestEntity, String.class);
@@ -75,9 +75,10 @@ public class ResumeAiService {
 
             return objectMapper.readValue(rawResponse, AiRecommendResponse.class);
 
-        } catch (RestClientResponseException e) {
-            log.error("❌ [AI 서버 에러] 상태: {}, 내용: {}", e.getStatusCode(), e.getResponseBodyAsString());
-            throw new RuntimeException("AI 분석 실패: " + e.getResponseBodyAsString());
+        } catch (org.springframework.web.client.RestClientResponseException
+                | org.springframework.web.client.ResourceAccessException e) {
+            // Controller에서 구체적인 에러 처리를 위해 그대로 던짐
+            throw e;
         } catch (Exception e) {
             log.error("❌ [통신 에러] {}", e.getMessage());
             e.printStackTrace();

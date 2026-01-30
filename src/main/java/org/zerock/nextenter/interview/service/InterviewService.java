@@ -96,6 +96,17 @@ public class InterviewService {
                                 .map(Portfolio::getFilePath)
                                 .collect(Collectors.toList());
 
+                log.info("========================================");
+                log.info("🤖 [AI-REQUEST] AI 엔진 요청 준비");
+                log.info("🤖 [AI-REQUEST] userId: {}", userId);
+                log.info("🤖 [AI-REQUEST] targetRole: {}", normalizedJobCategory);
+                log.info("🤖 [AI-REQUEST] portfolioFiles 개수: {}", portfolioFiles.size());
+                if (!portfolioFiles.isEmpty()) {
+                        log.info("🤖 [AI-REQUEST] portfolioFiles: {}", portfolioFiles);
+                }
+                log.info("🤖 [AI-REQUEST] resumeContent 키: {}", resumeContent.keySet());
+                log.info("========================================");
+
                 // 6. AI에게 첫 질문 요청
                 AiInterviewRequest aiRequest = AiInterviewRequest.builder()
                                 .id(userId.toString())
@@ -111,9 +122,10 @@ public class InterviewService {
                 AiInterviewResponse aiResponse;
                 try {
                         aiResponse = aiInterviewClient.getNextQuestion(aiRequest);
-                        log.info("AI Server 응답 성공");
+                        log.info("✅ [AI-RESPONSE] AI Server 응답 성공");
+                        log.info("✅ [AI-RESPONSE] 첫 질문: {}", aiResponse.getRealtime().getNextQuestion());
                 } catch (Exception e) {
-                        log.error("AI Server 연동 실패", e);
+                        log.error("❌ [AI-RESPONSE] AI Server 연동 실패", e);
                         throw new RuntimeException("AI 서버 연동 실패: " + e.getMessage());
                 }
 
@@ -410,24 +422,48 @@ public class InterviewService {
         // ===== Private Methods =====
 
         private Map<String, Object> buildResumeContent(Resume resume) {
+                log.info("========================================");
+                log.info("🔍 [AI-DATA] Resume 데이터 구성 시작");
+                log.info("🔍 [AI-DATA] resumeId: {}", resume.getResumeId());
+
                 Map<String, Object> content = new HashMap<>();
 
                 content.put("title", resume.getTitle());
+                log.info("🔍 [AI-DATA] title: {}", resume.getTitle());
 
                 // 직무 정규화
                 String normalizedJobCategory = org.zerock.nextenter.common.constants.JobConstants
                                 .normalize(resume.getJobCategory());
                 content.put("job_category", normalizedJobCategory);
+                log.info("🔍 [AI-DATA] job_category: {} (원본: {})", normalizedJobCategory, resume.getJobCategory());
 
-                content.put("education", parseJsonSafe(resume.getEducations()));
-                content.put("professional_experience", parseJsonSafe(resume.getCareers()));
-                content.put("project_experience", parseJsonSafe(resume.getExperiences()));
-                content.put("skills", parseJsonSafe(resume.getSkills()));
+                Object education = parseJsonSafe(resume.getEducations());
+                content.put("education", education);
+                log.info("🔍 [AI-DATA] education: {}", education);
 
-                if (resume.getExtractedText() != null) {
-                        content.put("raw_text", resume.getExtractedText());
+                Object careers = parseJsonSafe(resume.getCareers());
+                content.put("professional_experience", careers);
+                log.info("🔍 [AI-DATA] professional_experience: {}", careers);
+
+                Object experiences = parseJsonSafe(resume.getExperiences());
+                content.put("project_experience", experiences);
+                log.info("🔍 [AI-DATA] project_experience: {}", experiences);
+
+                Object skills = parseJsonSafe(resume.getSkills());
+                content.put("skills", skills);
+                log.info("🔍 [AI-DATA] skills: {}", skills);
+
+                if (resume.getExtractedText() != null && !resume.getExtractedText().isBlank()) {
+                        String rawText = resume.getExtractedText();
+                        content.put("raw_text", rawText);
+                        log.info("🔍 [AI-DATA] raw_text 길이: {} chars", rawText.length());
+                        int previewLength = Math.min(200, rawText.length());
+                        log.info("🔍 [AI-DATA] raw_text 미리보기: {}", rawText.substring(0, previewLength));
+                } else {
+                        log.warn("⚠️ [AI-DATA] raw_text가 NULL이거나 비어있습니다! 파일 기반 이력서의 경우 면접 품질이 저하될 수 있습니다.");
                 }
 
+                log.info("========================================");
                 return content;
         }
 

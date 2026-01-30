@@ -44,26 +44,27 @@ public class PortfolioService {
 
     // 허용된 파일 확장자
     private static final List<String> ALLOWED_EXTENSIONS = Arrays.asList(
-            "pdf", "docx", "doc", "hwp", "pptx", "ppt", "xlsx", "xls", "zip", "jpg", "jpeg", "png"
-    );
+            "pdf", "docx", "doc", "hwp", "pptx", "ppt", "xlsx", "xls", "zip", "jpg", "jpeg", "png");
 
     // 이력서당 최대 포트폴리오 파일 개수
     private static final int MAX_PORTFOLIO_COUNT = 10;
 
     /**
      * 포트폴리오 파일 업로드
-     * @param userId 사용자 ID
-     * @param resumeId 이력서 ID
-     * @param file 업로드할 파일
+     * 
+     * @param userId      사용자 ID
+     * @param resumeId    이력서 ID
+     * @param file        업로드할 파일
      * @param description 포트폴리오 설명
      * @return 업로드 응답 DTO
      */
     @Transactional
-    public PortfolioUploadResponse uploadPortfolio(Long userId, Long resumeId, 
-                                                    MultipartFile file, String description) {
+    public PortfolioUploadResponse uploadPortfolio(Long userId, Long resumeId,
+            MultipartFile file, String description) {
         // 1. 이력서 존재 및 소유권 확인
         Resume resume = resumeRepository.findById(resumeId)
-                .orElseThrow(() -> new IllegalArgumentException("이력서를 찾을 수 없습니다"));
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "이력서를 찾을 수 없습니다. 포트폴리오를 업로드하려면 먼저 이력서를 생성해야 합니다. (resumeId: " + resumeId + ")"));
 
         if (!resume.getUserId().equals(userId)) {
             throw new IllegalArgumentException("본인의 이력서에만 포트폴리오를 추가할 수 있습니다");
@@ -97,8 +98,8 @@ public class PortfolioService {
 
         Portfolio savedPortfolio = portfolioRepository.save(portfolio);
 
-        log.info("포트폴리오 업로드 성공 - resumeId: {}, portfolioId: {}, fileName: {}", 
-                 resumeId, savedPortfolio.getPortfolioId(), originalFileName);
+        log.info("포트폴리오 업로드 성공 - resumeId: {}, portfolioId: {}, fileName: {}",
+                resumeId, savedPortfolio.getPortfolioId(), originalFileName);
 
         // 6. 응답 생성
         return PortfolioUploadResponse.success(
@@ -106,13 +107,13 @@ public class PortfolioService {
                 resumeId,
                 originalFileName,
                 fileType,
-                file.getSize()
-        );
+                file.getSize());
     }
 
     /**
      * 특정 이력서의 모든 포트폴리오 조회
-     * @param userId 사용자 ID
+     * 
+     * @param userId   사용자 ID
      * @param resumeId 이력서 ID
      * @return 포트폴리오 목록 응답
      */
@@ -136,7 +137,8 @@ public class PortfolioService {
 
         // 4. 전체 파일 크기 계산
         Long totalFileSize = portfolioRepository.sumFileSizeByResumeId(resumeId);
-        if (totalFileSize == null) totalFileSize = 0L;
+        if (totalFileSize == null)
+            totalFileSize = 0L;
 
         return PortfolioListResponse.builder()
                 .resumeId(resumeId)
@@ -148,8 +150,9 @@ public class PortfolioService {
 
     /**
      * 포트폴리오 상세 조회
-     * @param userId 사용자 ID
-     * @param resumeId 이력서 ID
+     * 
+     * @param userId      사용자 ID
+     * @param resumeId    이력서 ID
      * @param portfolioId 포트폴리오 ID
      * @return 포트폴리오 DTO
      */
@@ -161,15 +164,16 @@ public class PortfolioService {
 
     /**
      * 포트폴리오 수정 (설명, 표시 순서)
-     * @param userId 사용자 ID
-     * @param resumeId 이력서 ID
+     * 
+     * @param userId      사용자 ID
+     * @param resumeId    이력서 ID
      * @param portfolioId 포트폴리오 ID
-     * @param request 수정 요청 DTO
+     * @param request     수정 요청 DTO
      * @return 수정된 포트폴리오 DTO
      */
     @Transactional
-    public PortfolioDto updatePortfolio(Long userId, Long resumeId, Long portfolioId, 
-                                        PortfolioUpdateRequest request) {
+    public PortfolioDto updatePortfolio(Long userId, Long resumeId, Long portfolioId,
+            PortfolioUpdateRequest request) {
         Portfolio portfolio = findPortfolioWithValidation(userId, resumeId, portfolioId);
 
         // 설명 업데이트
@@ -191,8 +195,9 @@ public class PortfolioService {
 
     /**
      * 포트폴리오 삭제
-     * @param userId 사용자 ID
-     * @param resumeId 이력서 ID
+     * 
+     * @param userId      사용자 ID
+     * @param resumeId    이력서 ID
      * @param portfolioId 포트폴리오 ID
      */
     @Transactional
@@ -205,14 +210,15 @@ public class PortfolioService {
         // 2. DB 레코드 삭제
         portfolioRepository.delete(portfolio);
 
-        log.info("포트폴리오 삭제 성공 - portfolioId: {}, fileName: {}", 
-                 portfolioId, portfolio.getFileName());
+        log.info("포트폴리오 삭제 성공 - portfolioId: {}, fileName: {}",
+                portfolioId, portfolio.getFileName());
     }
 
     /**
      * 포트폴리오 파일 다운로드
-     * @param userId 사용자 ID
-     * @param resumeId 이력서 ID
+     * 
+     * @param userId      사용자 ID
+     * @param resumeId    이력서 ID
      * @param portfolioId 포트폴리오 ID
      * @return 파일 리소스
      */
@@ -268,8 +274,7 @@ public class PortfolioService {
         String extension = getFileExtension(file);
         if (!ALLOWED_EXTENSIONS.contains(extension.toLowerCase())) {
             throw new IllegalArgumentException(
-                    "허용되지 않는 파일 형식입니다. 허용 형식: " + String.join(", ", ALLOWED_EXTENSIONS)
-            );
+                    "허용되지 않는 파일 형식입니다. 허용 형식: " + String.join(", ", ALLOWED_EXTENSIONS));
         }
     }
 

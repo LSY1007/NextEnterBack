@@ -25,14 +25,20 @@ public class ResumeAiController {
     @PostMapping("/recommend")
     public ResponseEntity<AiRecommendResponse> recommendAndSave(@RequestBody AiRecommendRequest request) {
         log.info("📥 [Controller] AI 추천 요청 수신: resumeId={}, userId={}", request.getResumeId(), request.getUserId());
-        
+
         try {
             AiRecommendResponse response = resumeAiRecommendService.recommendAndSave(request);
             log.info("✅ [Controller] 요청 처리 완료: recommendId={}", response.getRecommendId());
             return ResponseEntity.ok(response);
+        } catch (org.springframework.web.client.RestClientResponseException e) {
+            log.error("❌ [Controller] AI 서버 응답 에러: Status={}, Body={}", e.getRawStatusCode(),
+                    e.getResponseBodyAsString());
+            return ResponseEntity.status(e.getRawStatusCode()).build(); // AI 서버의 에러 상태 코드 그대로 전달
+        } catch (org.springframework.web.client.ResourceAccessException e) {
+            log.error("❌ [Controller] AI 서버 연결 실패: {}", e.getMessage());
+            throw new RuntimeException("AI 서버에 연결할 수 없습니다. (Connection Refused)");
         } catch (Exception e) {
             log.error("❌ [Controller] 분석 실패: {}", e.getMessage());
-            // 상세 에러 메시지를 포함하여 예외를 던집니다.
             throw new RuntimeException("AI 분석 요청 처리 중 오류가 발생했습니다: " + e.getMessage());
         }
     }

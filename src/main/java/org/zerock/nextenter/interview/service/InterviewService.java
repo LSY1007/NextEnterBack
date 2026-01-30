@@ -7,7 +7,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.zerock.nextenter.interview.client.AiInterviewClient;
-import org.zerock.nextenter.interview.aop.InterviewContextHolder;
 import org.zerock.nextenter.interview.client.AiInterviewClient.AiInterviewRequest;
 import org.zerock.nextenter.interview.client.AiInterviewClient.AiInterviewResponse;
 import org.zerock.nextenter.interview.dto.*;
@@ -21,7 +20,7 @@ import org.zerock.nextenter.interview.repository.InterviewRepository;
 import org.zerock.nextenter.resume.entity.Portfolio;
 import org.zerock.nextenter.resume.entity.Resume;
 import org.zerock.nextenter.resume.repository.PortfolioRepository;
-// import org.zerock.nextenter.resume.repository.ResumeRepository; // Removed as AOP handles it
+import org.zerock.nextenter.resume.repository.ResumeRepository;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -37,8 +36,8 @@ public class InterviewService {
 
         private final InterviewRepository interviewRepository;
         private final InterviewMessageRepository interviewMessageRepository;
-        private final PortfolioRepository portfolioRepository; // Added
-        // private final ResumeRepository resumeRepository; // Removed
+        private final PortfolioRepository portfolioRepository;
+        private final ResumeRepository resumeRepository;
         private final AiInterviewClient aiInterviewClient;
         private final ObjectMapper objectMapper;
 
@@ -53,16 +52,12 @@ public class InterviewService {
                                         throw new IllegalStateException("이미 진행 중인 면접이 있습니다. 먼저 완료하거나 취소해주세요.");
                                 });
 
-                // 2. 이력서 조회 (AOP Context 사용)
-                Resume resume = InterviewContextHolder.getResume();
-                if (resume == null || !resume.getResumeId().equals(request.getResumeId())) {
-                        log.error("Resume Context Error: contextResume={}, requestResumeId={}", 
-                            resume != null ? resume.getResumeId() : "null", 
-                            request.getResumeId());
-                        // Fallback check (Should be handled by AOP)
-                        throw new IllegalStateException("이력서 컨텍스트 초기화 실패: Resume is null or verification failed");
-                }
-                log.info("Resume Context Verified: resumeId={}", resume.getResumeId());
+                // 2. 이력서 조회 (Direct Lookup)
+                Resume resume = resumeRepository.findById(request.getResumeId())
+                                .orElseThrow(() -> new IllegalArgumentException(
+                                                "이력서를 찾을 수 없습니다. ID: " + request.getResumeId()));
+
+                log.info("Resume Found: resumeId={}", resume.getResumeId());
 
                 // 3. Difficulty 유효성 검증
                 Difficulty difficulty;
@@ -73,11 +68,15 @@ public class InterviewService {
                                         "유효하지 않은 난이도입니다. JUNIOR 또는 SENIOR만 가능합니다. 입력값: " + request.getDifficulty());
                 }
 
+                // 직무 정규화 (Data Analyst -> AI/LLM Engineer)
+                String normalizedJobCategory = org.zerock.nextenter.common.constants.JobConstants
+                                .normalize(request.getJobCategory());
+
                 // 4. 면접 세션 생성
                 Interview interview = Interview.builder()
                                 .userId(userId)
                                 .resumeId(request.getResumeId())
-                                .jobCategory(request.getJobCategory())
+                                .jobCategory(normalizedJobCategory) // Normalized
                                 .difficulty(difficulty)
                                 .totalTurns(request.getTotalTurns() != null ? request.getTotalTurns() : 5)
                                 .currentTurn(0)
@@ -86,58 +85,41 @@ public class InterviewService {
 
                 interviewRepository.save(interview);
                 log.info("면접 세션 생성 완료: interviewId={}, userId={}, jobCategory={}",
-                                interview.getInterviewId(), userId, request.getJobCategory());
+                                interview.getInterviewId(), userId, normalizedJobCategory);
 
-                java.util.Map<String, Object> finalResumeContent;
-                if (request.getResumeContent() != null && !request.getResumeContent().isEmpty()) {
-                        finalResumeContent = request.getResumeContent();
-                } else {
-                        finalResumeContent = buildResumeContent(resume);
-                }
+                // 5. Context 구성 (DB 조회)
+                Map<String, Object> resumeContent = buildResumeContent(resume);
 
-                List<String> finalPortfolioFiles;
-                if (request.getPortfolioFiles() != null) {
-                        finalPortfolioFiles = request.getPortfolioFiles();
-                } else {
-                        finalPortfolioFiles = portfolioRepository
-                                        .findByResumeIdOrderByDisplayOrder(request.getResumeId())
-                                        .stream()
-                                        .map(Portfolio::getFilePath)
-                                        .collect(Collectors.toList());
-                }
+                List<String> portfolioFiles = portfolioRepository
+                                .findByResumeIdOrderByDisplayOrder(request.getResumeId())
+                                .stream()
+                                .map(Portfolio::getFilePath)
+                                .collect(Collectors.toList());
 
-                // 5. AI에게 첫 질문 요청
+                // 6. AI에게 첫 질문 요청
                 AiInterviewRequest aiRequest = AiInterviewRequest.builder()
                                 .id(userId.toString())
-                                .targetRole(request.getJobCategory())
-                                .resumeContent(finalResumeContent)
+                                .targetRole(normalizedJobCategory) // Normalized
+                                .resumeContent(resumeContent)
                                 .lastAnswer(null) // 첫 질문이므로 null
-                                .portfolioFiles(finalPortfolioFiles) // 파일 경로 전달
-                                .portfolio(request.getPortfolio()) // 포트폴리오 메타데이터 전달
+                                .portfolioFiles(portfolioFiles)
                                 .build();
-                
-                log.info("AI Server 요청 준비: targetRole={}, resumeId={}", aiRequest.getTargetRole(), resume.getResumeId());
+
+                log.info("AI Server 요청 준비: targetRole={}, resumeId={}", aiRequest.getTargetRole(),
+                                resume.getResumeId());
 
                 AiInterviewResponse aiResponse;
                 try {
-                    aiResponse = aiInterviewClient.getNextQuestion(aiRequest);
-                    log.info("AI Server 응답 성공");
+                        aiResponse = aiInterviewClient.getNextQuestion(aiRequest);
+                        log.info("AI Server 응답 성공");
                 } catch (Exception e) {
-                    log.error("AI Server 연동 실패", e);
-                    // DEBUG: Write to file
-                    try (java.io.PrintWriter pw = new java.io.PrintWriter(new java.io.FileWriter("error_log.txt", true))) {
-                        pw.println("Timestamp: " + java.time.LocalDateTime.now());
-                        e.printStackTrace(pw);
-                    } catch (java.io.IOException ioe) {
-                        ioe.printStackTrace();
-                    }
-                    throw new RuntimeException("AI 서버 연동 실패: " + e.getMessage());
+                        log.error("AI Server 연동 실패", e);
+                        throw new RuntimeException("AI 서버 연동 실패: " + e.getMessage());
                 }
-                
+
                 String firstQuestion = aiResponse.getRealtime().getNextQuestion();
 
-                // 6. 첫 질문 저장
-                // AI가 준 질문이 리액션과 합쳐져 있을 수 있음 (Client 구현 참조)
+                // 7. 첫 질문 저장
                 InterviewMessage questionMessage = InterviewMessage.builder()
                                 .interviewId(interview.getInterviewId())
                                 .turnNumber(1)
@@ -155,7 +137,6 @@ public class InterviewService {
                                 .currentTurn(interview.getCurrentTurn())
                                 .question(firstQuestion)
                                 .isCompleted(false)
-                                // Map rich metadata
                                 .reactionType(aiResponse.getRealtime().getReaction() != null
                                                 ? aiResponse.getRealtime().getReaction().getType()
                                                 : null)
@@ -182,11 +163,9 @@ public class InterviewService {
                         throw new IllegalStateException("진행 중인 면접이 아닙니다");
                 }
 
-                // 2. 이력서 재조회 (AOP Context 사용)
-                Resume resume = InterviewContextHolder.getResume();
-                if (resume == null) {
-                        throw new IllegalStateException("이력서 컨텍스트 초기화 실패");
-                }
+                // 2. 이력서 조회
+                Resume resume = resumeRepository.findById(interview.getResumeId())
+                                .orElseThrow(() -> new IllegalStateException("이력서 정보를 찾을 수 없습니다."));
 
                 // 3. 사용자 답변 저장
                 InterviewMessage answerMessage = InterviewMessage.builder()
@@ -197,53 +176,36 @@ public class InterviewService {
                                 .build();
                 interviewMessageRepository.save(answerMessage);
 
-                // 4. AI에게 답변 전송 (Proxy Check)
-                java.util.Map<String, Object> finalResumeContent;
-                if (request.getResumeContent() != null && !request.getResumeContent().isEmpty()) {
-                        finalResumeContent = request.getResumeContent();
-                } else {
-                        finalResumeContent = buildResumeContent(resume);
-                }
+                // 4. AI에게 답변 전송
+                Map<String, Object> resumeContent = buildResumeContent(resume);
+                List<String> portfolioFiles = portfolioRepository
+                                .findByResumeIdOrderByDisplayOrder(resume.getResumeId())
+                                .stream()
+                                .map(Portfolio::getFilePath)
+                                .collect(Collectors.toList());
 
-                List<String> finalPortfolioFiles;
-                if (request.getPortfolioFiles() != null) {
-                        finalPortfolioFiles = request.getPortfolioFiles();
-                } else {
-                        finalPortfolioFiles = portfolioRepository
-                                        .findByResumeIdOrderByDisplayOrder(resume.getResumeId())
-                                        .stream()
-                                        .map(Portfolio::getFilePath)
-                                        .collect(Collectors.toList());
-                }
+                // 직무 정규화 (DB에 예전 값이 있을 수 있으므로)
+                String normalizedJobCategory = org.zerock.nextenter.common.constants.JobConstants
+                                .normalize(interview.getJobCategory());
 
                 AiInterviewRequest aiRequest = AiInterviewRequest.builder()
                                 .id(userId.toString())
-                                .targetRole(interview.getJobCategory())
-                                .resumeContent(finalResumeContent)
+                                .targetRole(normalizedJobCategory) // Normalized
+                                .resumeContent(resumeContent)
                                 .lastAnswer(request.getAnswer())
-                                .portfolioFiles(finalPortfolioFiles)
-                                .portfolio(request.getPortfolio())
+                                .portfolioFiles(portfolioFiles)
                                 .build();
-                
-                // Debug Log
-                try {
-                    log.info("🚀 [Backend Debug] Sending AI Request: {}", objectMapper.writeValueAsString(aiRequest));
-                } catch(Exception e) {
-                    log.error("Failed to log AI Request", e);
-                }
 
                 AiInterviewResponse aiResponse = aiInterviewClient.getNextQuestion(aiRequest);
                 String nextQuestion = aiResponse.getRealtime().getNextQuestion();
                 String aiFeedback = null;
                 Integer aiScore = 0;
 
-                // 리포트가 있으면 점수/피드백 추출 (단순화: 마지막 턴 리포트 사용 or 매 턴 점수?)
-                // 여기서는 마지막 턴일 때만 유의미하게 저장하도록 처리
+                // 리포트 처리 (마지막 턴 or AI가 pass_fail 판단 시)
                 if (aiResponse.getRealtime().getReport() != null) {
                         Map<String, Object> report = aiResponse.getRealtime().getReport();
                         aiFeedback = (String) report.get("feedback_comment");
                         if (report.get("competency_scores") instanceof Map) {
-                                // 평균 점수 계산 (임시)
                                 @SuppressWarnings("unchecked")
                                 Map<String, Double> scores = (Map<String, Double>) report.get("competency_scores");
                                 if (scores != null && !scores.isEmpty()) {
@@ -256,8 +218,6 @@ public class InterviewService {
 
                 // 5. 면접 종료 조건 확인
                 if (interview.getCurrentTurn() >= interview.getTotalTurns()) {
-                        // 마지막 응답이었음. AI의 리포트를 바탕으로 종료 처리
-                        // 만약 이번 턴에서 리포트가 안왔다면(그럴리 없겠지만), 기본값 처리
                         if (aiScore == 0)
                                 aiScore = 80; // Fallback
                         if (aiFeedback == null)
@@ -291,7 +251,6 @@ public class InterviewService {
                                 .currentTurn(interview.getCurrentTurn())
                                 .question(nextQuestion)
                                 .isCompleted(false)
-                                // Map rich metadata
                                 .reactionType(aiResponse.getRealtime().getReaction() != null
                                                 ? aiResponse.getRealtime().getReaction().getType()
                                                 : null)
@@ -306,12 +265,11 @@ public class InterviewService {
 
         /**
          * 답변 수정 (Dialogic Feedback Loop)
-         * 이전 답변을 수정하여 다시 평가받음 -- Interview Xpert/Conversate
          */
         @Transactional
         public InterviewQuestionResponse modifyAnswer(Long userId, InterviewMessageRequest request) {
                 log.info("답변 수정 요청: userId={}, interviewId={}", userId, request.getInterviewId());
-                // 1. 면접 세션 조회
+
                 Interview interview = interviewRepository.findByInterviewIdAndUserId(request.getInterviewId(), userId)
                                 .orElseThrow(() -> new IllegalArgumentException("면접을 찾을 수 없습니다"));
 
@@ -326,33 +284,34 @@ public class InterviewService {
                         throw new IllegalStateException("수정할 답변이 없습니다. (첫 질문 단계)");
                 }
 
-                // 2. Resume Context (AOP handled, but we need to ensure AOP triggers for this
-                // method too if we add it to Aspect)
-                // Resume Context Logic remains...
-                Resume resume = InterviewContextHolder.getResume();
-                if (resume == null) {
-                        throw new IllegalStateException("System Error: Resume Context not set.");
-                }
+                Resume resume = resumeRepository.findById(interview.getResumeId())
+                                .orElseThrow(() -> new IllegalStateException("이력서를 찾을 수 없습니다."));
 
-                // 3. 기존 답변(Candidate) 업데이트
+                // 기존 답변(Candidate) 업데이트
                 InterviewMessage candidateMsg = interviewMessageRepository.findByInterviewIdAndTurnNumberAndRole(
                                 interview.getInterviewId(), targetTurn, Role.CANDIDATE)
                                 .orElseThrow(() -> new IllegalArgumentException("이전 답변을 찾을 수 없습니다."));
 
-                candidateMsg.updateMessage(request.getAnswer()); // Need updateMessage method in Entity or use setter
-                // Assuming setter or update method exists? Entity usually has @Data or Setter.
-                // Let's assume Setter exists due to @Data (Lombok) in Entity (I verified Entity
-                // file? No I didn't verify Message Entity fully).
-                // Let's check imports. InterviewMessage import suggests it exists.
-                // I'll assume setters work. If immutable, I'd need builder to copy.
-                // But @Data usually provides setters.
+                candidateMsg.updateMessage(request.getAnswer());
 
-                // 4. AI 재요청
+                // AI 재요청
+                Map<String, Object> resumeContent = buildResumeContent(resume);
+                List<String> portfolioFiles = portfolioRepository
+                                .findByResumeIdOrderByDisplayOrder(resume.getResumeId())
+                                .stream()
+                                .map(Portfolio::getFilePath)
+                                .collect(Collectors.toList());
+
+                // 직무 정규화
+                String normalizedJobCategory = org.zerock.nextenter.common.constants.JobConstants
+                                .normalize(interview.getJobCategory());
+
                 AiInterviewRequest aiRequest = AiInterviewRequest.builder()
                                 .id(userId.toString())
-                                .targetRole(interview.getJobCategory())
-                                .resumeContent(buildResumeContent(resume))
+                                .targetRole(normalizedJobCategory) // Normalized
+                                .resumeContent(resumeContent)
                                 .lastAnswer(request.getAnswer())
+                                .portfolioFiles(portfolioFiles)
                                 .systemInstruction(
                                                 "This is a revised answer from the candidate. Please re-evaluate and provide feedback.")
                                 .build();
@@ -360,24 +319,9 @@ public class InterviewService {
                 AiInterviewResponse aiResponse = aiInterviewClient.getNextQuestion(aiRequest);
                 String nextQuestion = aiResponse.getRealtime().getNextQuestion();
 
-                // 5. 질문(Interviewer) 업데이트 (피드백이 포함될 수 있음)
+                // 질문(Interviewer) 업데이트
                 InterviewMessage interviewerMsg = interviewMessageRepository.findByInterviewIdAndTurnNumberAndRole(
-                                interview.getInterviewId(), currentTurn, Role.INTERVIEWER) // Next question uses same
-                                                                                           // turn?
-                                // Wait, logic in submitAnswer:
-                                // candidate msg -> turn N
-                                // increment turn
-                                // interviewer msg -> turn N+1 (next question)
-                                //
-                                // Let's re-read submitAnswer logic carefully.
-                                // 133: turnNumber(interview.getCurrentTurn()) -> Role.CANDIDATE
-                                // 191: interview.incrementTurn()
-                                // 195: turnNumber(interview.getCurrentTurn()) -> Role.INTERVIEWER (Next
-                                // Question)
-
-                                // So Candidate is Turn T. Question became Turn T+1.
-                                // If we modify answer at Turn T, we should update Question at Turn T+1.
-                                // The currentTurn of interview is already T+1.
+                                interview.getInterviewId(), currentTurn, Role.INTERVIEWER)
                                 .orElseThrow(() -> new IllegalArgumentException("다음 질문 메시지를 찾을 수 없습니다."));
 
                 interviewerMsg.updateMessage(nextQuestion);
@@ -468,19 +412,18 @@ public class InterviewService {
         private Map<String, Object> buildResumeContent(Resume resume) {
                 Map<String, Object> content = new HashMap<>();
 
-                // 1. Basic Info
                 content.put("title", resume.getTitle());
-                content.put("job_category", resume.getJobCategory());
 
-                // 2. Parse JSON fields (Resume entity stores them as JSON strings)
+                // 직무 정규화
+                String normalizedJobCategory = org.zerock.nextenter.common.constants.JobConstants
+                                .normalize(resume.getJobCategory());
+                content.put("job_category", normalizedJobCategory);
+
                 content.put("education", parseJsonSafe(resume.getEducations()));
                 content.put("professional_experience", parseJsonSafe(resume.getCareers()));
-                content.put("project_experience", parseJsonSafe(resume.getExperiences())); // Note: variable mappings
-                                                                                           // based on Resume.java
-                                                                                           // comments
+                content.put("project_experience", parseJsonSafe(resume.getExperiences()));
                 content.put("skills", parseJsonSafe(resume.getSkills()));
 
-                // 3. Raw Text (fallback)
                 if (resume.getExtractedText() != null) {
                         content.put("raw_text", resume.getExtractedText());
                 }
@@ -490,11 +433,9 @@ public class InterviewService {
 
         private Object parseJsonSafe(String json) {
                 if (json == null || json.isBlank()) {
-                        return Collections.emptyList(); // Default to list, but skills might be map. Adjust if needed.
+                        return Collections.emptyList();
                 }
                 try {
-                        // Try explicit list first, then map if that fails?
-                        // Better: parse as Generic Objects
                         return objectMapper.readValue(json, new TypeReference<Object>() {
                         });
                 } catch (Exception e) {

@@ -37,6 +37,8 @@ public class ResumeAiController {
         } catch (org.springframework.web.client.ResourceAccessException e) {
             log.error("❌ [Controller] AI 서버 연결 실패: {}", e.getMessage());
             throw new RuntimeException("AI 서버에 연결할 수 없습니다. (Connection Refused)");
+        } catch (IllegalArgumentException e) {
+            throw e; // GlobalExceptionHandler가 400 Bad Request로 처리
         } catch (Exception e) {
             log.error("❌ [Controller] 분석 실패: {}", e.getMessage());
             throw new RuntimeException("AI 분석 요청 처리 중 오류가 발생했습니다: " + e.getMessage());

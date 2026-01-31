@@ -41,6 +41,8 @@ public class ResumeService {
 
     private final ResumeRepository resumeRepository;
     private final FileStorageService fileStorageService;
+    private final ResumeFileTextExtractor resumeFileTextExtractor;
+    private final ResumeStructureParser resumeStructureParser;
     private final UserRepository userRepository;
     private final TalentContactRepository talentContactRepository;
     private final PortfolioRepository portfolioRepository;
@@ -697,9 +699,39 @@ public class ResumeService {
     }
 
     @Transactional
-    public ResumeResponse createResumeWithFiles(ResumeRequest request, Long userId, List<MultipartFile> portfolioFiles,
-            List<MultipartFile> coverLetterFiles) {
+    public ResumeResponse createResumeWithFiles(ResumeRequest request, Long userId, List<MultipartFile> resumeFiles,
+            List<MultipartFile> portfolioFiles, List<MultipartFile> coverLetterFiles) {
         ResumeResponse resume = createResume(request, userId);
+        Resume resumeEntity = resumeRepository.findById(resume.getResumeId())
+                .orElseThrow(() -> new IllegalArgumentException("이력서를 찾을 수 없습니다"));
+
+        // 이력서 파일(첫 번째) 저장 + 텍스트 추출 → extractedText, filePath 저장
+        if (resumeFiles != null && !resumeFiles.isEmpty()) {
+            MultipartFile firstResumeFile = resumeFiles.get(0);
+            try {
+                String filename = fileStorageService.saveFile(firstResumeFile);
+                String filePath = fileStorageService.getFileUrl(filename);
+                String fileType = getFileExtension(firstResumeFile.getOriginalFilename());
+                resumeEntity.setFilePath(filePath);
+                resumeEntity.setFileType(fileType);
+                String extractedText = resumeFileTextExtractor.extractFromFile(firstResumeFile);
+                if (extractedText != null && !extractedText.isBlank()) {
+                    resumeEntity.setExtractedText(extractedText);
+                    ResumeStructureParser.ParsedResumeStructure parsed = resumeStructureParser.parse(extractedText);
+                    resumeEntity.setSkills(parsed.getSkills());
+                    resumeEntity.setEducations(parsed.getEducations());
+                    resumeEntity.setCareers(parsed.getCareers());
+                    resumeEntity.setExperiences(parsed.getExperiences());
+                    log.info("이력서 파일 텍스트 추출 및 구조화 완료 - resumeId: {}, 길이: {} chars", resume.getResumeId(), extractedText.length());
+                } else {
+                    log.warn("이력서 파일 텍스트 추출 결과 없음 - resumeId: {}", resume.getResumeId());
+                }
+                resumeRepository.save(resumeEntity);
+            } catch (Exception e) {
+                log.error("이력서 파일 저장/추출 실패: {}", firstResumeFile.getOriginalFilename(), e);
+            }
+        }
+
         if (portfolioFiles != null && !portfolioFiles.isEmpty()) {
             int displayOrder = 0;
             for (MultipartFile file : portfolioFiles) {
@@ -707,8 +739,6 @@ public class ResumeService {
                     String filename = fileStorageService.saveFile(file);
                     String filePath = fileStorageService.getFileUrl(filename);
                     String fileType = getFileExtension(file.getOriginalFilename());
-                    Resume resumeEntity = resumeRepository.findById(resume.getResumeId())
-                            .orElseThrow(() -> new IllegalArgumentException("이력서를 찾을 수 없습니다"));
                     Portfolio portfolio = Portfolio.builder()
                             .resume(resumeEntity)
                             .fileName(file.getOriginalFilename())
@@ -749,8 +779,36 @@ public class ResumeService {
 
     @Transactional
     public ResumeResponse updateResumeWithFiles(Long resumeId, ResumeRequest request, Long userId,
-            List<MultipartFile> portfolioFiles, List<MultipartFile> coverLetterFiles) {
+            List<MultipartFile> resumeFiles, List<MultipartFile> portfolioFiles, List<MultipartFile> coverLetterFiles) {
         ResumeResponse resume = updateResume(resumeId, request, userId);
+        Resume resumeEntity = resumeRepository.findById(resumeId)
+                .orElseThrow(() -> new IllegalArgumentException("이력서를 찾을 수 없습니다"));
+
+        // 이력서 파일(첫 번째) 있으면 저장 + 텍스트 재추출
+        if (resumeFiles != null && !resumeFiles.isEmpty()) {
+            MultipartFile firstResumeFile = resumeFiles.get(0);
+            try {
+                String filename = fileStorageService.saveFile(firstResumeFile);
+                String filePath = fileStorageService.getFileUrl(filename);
+                String fileType = getFileExtension(firstResumeFile.getOriginalFilename());
+                resumeEntity.setFilePath(filePath);
+                resumeEntity.setFileType(fileType);
+                String extractedText = resumeFileTextExtractor.extractFromFile(firstResumeFile);
+                if (extractedText != null && !extractedText.isBlank()) {
+                    resumeEntity.setExtractedText(extractedText);
+                    ResumeStructureParser.ParsedResumeStructure parsed = resumeStructureParser.parse(extractedText);
+                    resumeEntity.setSkills(parsed.getSkills());
+                    resumeEntity.setEducations(parsed.getEducations());
+                    resumeEntity.setCareers(parsed.getCareers());
+                    resumeEntity.setExperiences(parsed.getExperiences());
+                    log.info("이력서 파일 텍스트 재추출 및 구조화 완료 - resumeId: {}, 길이: {} chars", resumeId, extractedText.length());
+                }
+                resumeRepository.save(resumeEntity);
+            } catch (Exception e) {
+                log.error("이력서 파일 저장/추출 실패: {}", firstResumeFile.getOriginalFilename(), e);
+            }
+        }
+
         if (portfolioFiles != null && !portfolioFiles.isEmpty()) {
             List<Portfolio> existingPortfolios = portfolioRepository.findByResumeIdOrderByDisplayOrder(resumeId);
             int displayOrder = existingPortfolios.size();
@@ -759,8 +817,6 @@ public class ResumeService {
                     String filename = fileStorageService.saveFile(file);
                     String filePath = fileStorageService.getFileUrl(filename);
                     String fileType = getFileExtension(file.getOriginalFilename());
-                    Resume resumeEntity = resumeRepository.findById(resumeId)
-                            .orElseThrow(() -> new IllegalArgumentException("이력서를 찾을 수 없습니다"));
                     Portfolio portfolio = Portfolio.builder()
                             .resume(resumeEntity)
                             .fileName(file.getOriginalFilename())

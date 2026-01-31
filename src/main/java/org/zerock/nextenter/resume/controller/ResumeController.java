@@ -447,32 +447,35 @@ public class ResumeController {
         }
 
         /**
-         * 파일 포함 이력서 생성
+         * 파일 포함 이력서 생성 (이력서 파일 PDF/DOCX → 텍스트 추출 후 DB 저장)
          */
         @PostMapping("/create-with-files")
         public ResponseEntity<ResumeResponse> createResumeWithFiles(
                         @RequestPart("request") @Valid ResumeRequest request,
+                        @RequestPart(value = "resumeFiles", required = false) List<MultipartFile> resumeFiles,
                         @RequestPart(value = "portfolioFiles", required = false) List<MultipartFile> portfolioFiles,
                         @RequestPart(value = "coverLetterFiles", required = false) List<MultipartFile> coverLetterFiles,
                         @RequestHeader("userId") Long userId) {
 
                 log.info("파일 포함 이력서 생성 요청 - userId: {}, title: {}", userId, request.getTitle());
+                log.info("이력서 파일 개수: {}", resumeFiles != null ? resumeFiles.size() : 0);
                 log.info("포트폴리오 파일 개수: {}", portfolioFiles != null ? portfolioFiles.size() : 0);
                 log.info("자기소개서 파일 개수: {}", coverLetterFiles != null ? coverLetterFiles.size() : 0);
 
                 ResumeResponse response = resumeService.createResumeWithFiles(
-                                request, userId, portfolioFiles, coverLetterFiles);
+                                request, userId, resumeFiles, portfolioFiles, coverLetterFiles);
 
                 return ResponseEntity.ok(response);
         }
 
         /**
-         * 파일 포함 이력서 수정
+         * 파일 포함 이력서 수정 (이력서 파일 있으면 텍스트 재추출)
          */
         @PutMapping("/{resumeId}/update-with-files")
         public ResponseEntity<ResumeResponse> updateResumeWithFiles(
                         @PathVariable Long resumeId,
                         @RequestPart("request") @Valid ResumeRequest request,
+                        @RequestPart(value = "resumeFiles", required = false) List<MultipartFile> resumeFiles,
                         @RequestPart(value = "portfolioFiles", required = false) List<MultipartFile> portfolioFiles,
                         @RequestPart(value = "coverLetterFiles", required = false) List<MultipartFile> coverLetterFiles,
                         @RequestHeader("userId") Long userId) {
@@ -480,7 +483,7 @@ public class ResumeController {
                 log.info("파일 포함 이력서 수정 요청 - resumeId: {}, userId: {}", resumeId, userId);
 
                 ResumeResponse response = resumeService.updateResumeWithFiles(
-                                resumeId, request, userId, portfolioFiles, coverLetterFiles);
+                                resumeId, request, userId, resumeFiles, portfolioFiles, coverLetterFiles);
 
                 return ResponseEntity.ok(response);
         }

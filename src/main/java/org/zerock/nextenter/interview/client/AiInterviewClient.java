@@ -10,8 +10,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.StringHttpMessageConverter;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
@@ -19,21 +24,18 @@ import java.util.Map;
 @Slf4j
 public class AiInterviewClient {
 
-    private final RestClient restClient;
     private final ObjectMapper objectMapper;
+    private final String aiServerUrl;
 
     // PII Regex Patterns (Interview Xpert & Security best practices)
-    // 주민등록번호, 전화번호, 이메일, 주소 등을 마스킹
     private static final String PHONE_REGEX = "01[016789]-?\\d{3,4}-?\\d{4}";
     private static final String EMAIL_REGEX = "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,6}";
-    private static final String RRN_REGEX = "\\d{6}-[1-4]\\d{6}"; // Simple RRN check
+    private static final String RRN_REGEX = "\\d{6}-[1-4]\\d{6}";
 
     public AiInterviewClient(@Value("${ai.server.url}") String aiServerUrl, ObjectMapper objectMapper) {
-        log.info("AI Server URL: {}", aiServerUrl);
-        this.restClient = RestClient.builder()
-                .baseUrl(aiServerUrl)
-                .build();
+        this.aiServerUrl = aiServerUrl;
         this.objectMapper = objectMapper;
+        log.info("AI Server URL: {}", aiServerUrl);
     }
 
     public AiInterviewResponse getNextQuestion(AiInterviewRequest request) {
@@ -42,24 +44,44 @@ public class AiInterviewClient {
         request.setLastAnswer(maskedAnswer);
 
         // 2. STAR Technique Enforcement (Conversate)
-        request.setSystemInstruction(
-                "Please provide feedback based on the STAR (Situation, Task, Action, Result) technique. If the answer lacks specific actions or results, ask follow-up questions to clarify.");
+        if (request.getSystemInstruction() == null) {
+            request.setSystemInstruction(
+                    "Please provide feedback based on the STAR (Situation, Task, Action, Result) technique. " +
+                    "If the answer lacks specific actions or results, ask follow-up questions to clarify."
+            );
+        }
 
         log.info("Requesting next question to AI: role={}, lastAnswer={}",
                 request.getTargetRole(),
                 request.getLastAnswer() != null ? "Present (Masked)" : "Null (Start)");
 
         try {
-            // Debugging: Convert to JSON to see exactly what is being sent
+            // 3. Serializing JSON with ObjectMapper (explicit)
             String jsonBody = objectMapper.writeValueAsString(request);
             log.debug("Sending JSON Body: {}", jsonBody);
 
-            return restClient.post()
-                    .uri("/interview/next")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(jsonBody) // Send the String directly to ensure control over serialization
-                    .retrieve()
-                    .body(AiInterviewResponse.class);
+            // 4. Using pure RestTemplate with explicit UTF-8 encoding
+            // This resolved the 400 Bad Request / Encoding issues in ResumeAiService
+            RestTemplate directRestTemplate = new RestTemplate();
+            directRestTemplate.getMessageConverters()
+                    .add(0, new StringHttpMessageConverter(StandardCharsets.UTF_8));
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(new MediaType("application", "json", StandardCharsets.UTF_8));
+
+            HttpEntity<String> requestEntity = new HttpEntity<>(jsonBody, headers);
+
+            String url = aiServerUrl + "/interview/next";
+            log.info("🚀 [AI-INTERVIEW] POST Request to: {}", url);
+
+            ResponseEntity<String> responseEntity = directRestTemplate.postForEntity(url, requestEntity, String.class);
+
+            if (responseEntity.getStatusCode().is2xxSuccessful() && responseEntity.getBody() != null) {
+                return objectMapper.readValue(responseEntity.getBody(), AiInterviewResponse.class);
+            } else {
+                throw new RuntimeException("AI Server responded with status: " + responseEntity.getStatusCode());
+            }
+
         } catch (Exception e) {
             log.error("Error communicating with AI Audit Server", e);
             throw new RuntimeException("AI Server connection failed: " + e.getMessage());
@@ -80,7 +102,65 @@ public class AiInterviewClient {
         return masked;
     }
 
+    /**
+     * 면접 종료 및 최종 점수 요청
+     */
+    public AiFinalizeResponse finalizeInterview(String sessionId) {
+        log.info("🏁 [AI-FINALIZE] Requesting final score for session: {}", sessionId);
+
+        try {
+            // 1. Prepare Request Body
+            Map<String, String> requestBody = Map.of("id", sessionId);
+            String jsonBody = objectMapper.writeValueAsString(requestBody);
+
+            // 2. Configure Headers
+            RestTemplate directRestTemplate = new RestTemplate();
+            directRestTemplate.getMessageConverters()
+                    .add(0, new StringHttpMessageConverter(StandardCharsets.UTF_8));
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(new MediaType("application", "json", StandardCharsets.UTF_8));
+
+            HttpEntity<String> requestEntity = new HttpEntity<>(jsonBody, headers);
+
+            // 3. Send Request
+            String url = aiServerUrl + "/interview/finalize";
+            log.info("🚀 [AI-FINALIZE] POST Request to: {}", url);
+
+            ResponseEntity<String> responseEntity = directRestTemplate.postForEntity(url, requestEntity, String.class);
+
+            if (responseEntity.getStatusCode().is2xxSuccessful() && responseEntity.getBody() != null) {
+                AiFinalizeResponse response = objectMapper.readValue(responseEntity.getBody(), AiFinalizeResponse.class);
+                log.info("✅ [AI-FINALIZE] Score: {}, Result: {}", response.getTotalScore(), response.getResult());
+                return response;
+            } else {
+                throw new RuntimeException("AI Finalize responded with status: " + responseEntity.getStatusCode());
+            }
+
+        } catch (Exception e) {
+            log.error("❌ [AI-FINALIZE] Error: {}", e.getMessage());
+            // Return fallback response instead of throwing
+            AiFinalizeResponse fallback = new AiFinalizeResponse();
+            fallback.setTotalScore(0.0);
+            fallback.setResult("Error");
+            fallback.setError(e.getMessage());
+            return fallback;
+        }
+    }
+
     // --- DTOs for AI Communication ---
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class AiFinalizeResponse {
+        @JsonProperty("total_score")
+        private Double totalScore;
+        
+        private String result;
+        private Map<String, Object> stats;
+        private String error;
+    }
 
     @Data
     @Builder
@@ -99,7 +179,7 @@ public class AiInterviewClient {
         @JsonProperty("last_answer")
         private String lastAnswer;
 
-        @JsonProperty("system_instruction") // New field for prompt injection
+        @JsonProperty("system_instruction") 
         private String systemInstruction;
 
         // Optional fields
@@ -108,7 +188,10 @@ public class AiInterviewClient {
         private Map<String, Object> portfolio;
 
         @JsonProperty("portfolio_files")
-        private List<String> portfolioFiles; // List of file paths/URLs
+        private List<String> portfolioFiles;
+
+        @JsonProperty("total_turns")
+        private Integer totalTurns; // ✅ 횟수 정보 추가
     }
 
     @Data

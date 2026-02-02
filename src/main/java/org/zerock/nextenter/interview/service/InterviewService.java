@@ -114,6 +114,7 @@ public class InterviewService {
                                 .resumeContent(resumeContent)
                                 .lastAnswer(null) // 첫 질문이므로 null
                                 .portfolioFiles(portfolioFiles)
+                                .totalTurns(interview.getTotalTurns()) // ✅ 횟수 정보 추가
                                 .build();
 
                 log.info("AI Server 요청 준비: targetRole={}, resumeId={}", aiRequest.getTargetRole(),
@@ -206,6 +207,7 @@ public class InterviewService {
                                 .resumeContent(resumeContent)
                                 .lastAnswer(request.getAnswer())
                                 .portfolioFiles(portfolioFiles)
+                                .totalTurns(interview.getTotalTurns()) // ✅ 횟수 정보 추가
                                 .build();
 
                 AiInterviewResponse aiResponse = aiInterviewClient.getNextQuestion(aiRequest);
@@ -230,8 +232,20 @@ public class InterviewService {
 
                 // 5. 면접 종료 조건 확인
                 if (interview.getCurrentTurn() >= interview.getTotalTurns()) {
-                        if (aiScore == 0)
+                        // [FIX] Python AI 서버에서 최종 점수 요청
+                        log.info("🏁 Requesting final score from AI server for userId: {}", userId);
+                        AiInterviewClient.AiFinalizeResponse finalizeResponse = 
+                                aiInterviewClient.finalizeInterview(userId.toString());
+                        
+                        if (finalizeResponse.getError() == null && finalizeResponse.getTotalScore() != null) {
+                                // AI 점수를 100점 만점으로 환산 (원래 5점 만점)
+                                aiScore = (int) (finalizeResponse.getTotalScore() * 20);
+                                log.info("✅ AI Final Score: {} (raw: {})", aiScore, finalizeResponse.getTotalScore());
+                        } else {
+                                log.warn("⚠️ AI Finalize failed, using fallback score. Error: {}", finalizeResponse.getError());
                                 aiScore = 80; // Fallback
+                        }
+                        
                         if (aiFeedback == null)
                                 aiFeedback = "면접이 종료되었습니다. 수고하셨습니다.";
 

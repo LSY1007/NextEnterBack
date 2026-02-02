@@ -2,6 +2,9 @@ package org.zerock.nextenter.recommendation.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.zerock.nextenter.ai.resume.dto.AiRecommendResponse;
+import org.zerock.nextenter.ai.resume.service.ResumeAiRecommendService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -13,10 +16,12 @@ import org.zerock.nextenter.resume.entity.Resume;
 import org.zerock.nextenter.resume.repository.ResumeRepository;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
+@Slf4j
 public class RecommendationService {
 
     private final JobRecommendationRepository recommendationRepository;
@@ -134,74 +139,58 @@ public class RecommendationService {
      * AI 서버 호출 (임시 Mock)
      * TODO: 나중에 실제 AI 서버 통신으로 교체
      */
-    private List<RecommendationJobDto> callAiServer(Resume resume, RecommendationRequest request) {
-        // TODO: 실제 AI 서버 통신 로직
-        // AiRecommendationRequest aiRequest = AiRecommendationRequest.from(resume, request);
-        // AiRecommendationResponse aiResponse = aiServerClient.getRecommendations(aiRequest);
-        // return aiResponse.toJobDtos();
+    // [NEW] AI 서비스 의존성 주입
+    private final ResumeAiRecommendService resumeAiRecommendService;
 
-        // 임시 Mock 데이터 (5개)
-        return List.of(
-                RecommendationJobDto.builder()
-                        .jobId(1L)
-                        .jobTitle("백엔드 개발자")
-                        .companyName("네이버")
-                        .score(95)
-                        .grade("S")
-                        .matchReasons(List.of("Spring Boot 5년 경력 일치", "Java 전문가 수준"))
-                        .missingSkills(List.of("Kafka"))
-                        .location("경기 성남시")
-                        .experienceLevel("경력 5년 이상")
-                        .salary("5000~7000만원")
-                        .build(),
-                RecommendationJobDto.builder()
-                        .jobId(2L)
-                        .jobTitle("시니어 백엔드 개발자")
-                        .companyName("카카오")
-                        .score(92)
-                        .grade("S")
-                        .matchReasons(List.of("기술 스택 100% 일치", "프로젝트 경험 우수"))
-                        .missingSkills(List.of())
-                        .location("경기 성남시")
-                        .experienceLevel("경력 5년 이상")
-                        .salary("6000~8000만원")
-                        .build(),
-                RecommendationJobDto.builder()
-                        .jobId(3L)
-                        .jobTitle("Java 개발자")
-                        .companyName("라인")
-                        .score(88)
-                        .grade("A")
-                        .matchReasons(List.of("Spring 경험 5년 이상"))
-                        .missingSkills(List.of("Redis", "MSA"))
-                        .location("서울 강남구")
-                        .experienceLevel("경력 3년 이상")
-                        .salary("4500~6000만원")
-                        .build(),
-                RecommendationJobDto.builder()
-                        .jobId(4L)
-                        .jobTitle("풀스택 개발자")
-                        .companyName("쿠팡")
-                        .score(85)
-                        .grade("A")
-                        .matchReasons(List.of("백엔드 경험 우수", "대규모 트래픽 경험"))
-                        .missingSkills(List.of("React", "Vue.js"))
-                        .location("서울 송파구")
-                        .experienceLevel("경력 4년 이상")
-                        .salary("5000~7000만원")
-                        .build(),
-                RecommendationJobDto.builder()
-                        .jobId(5L)
-                        .jobTitle("서버 개발자")
-                        .companyName("배달의민족")
-                        .score(82)
-                        .grade("B")
-                        .matchReasons(List.of("Spring Boot 경험", "API 설계 능력"))
-                        .missingSkills(List.of("Kubernetes", "Docker"))
-                        .location("서울 송파구")
-                        .experienceLevel("경력 3년 이상")
-                        .salary("4000~5500만원")
-                        .build()
-        );
+    /**
+     * AI 서버 호출 (실제 구현)
+     * ResumeAiRecommendService를 통해 AI 서버와 통신하고 결과를 변환합니다.
+     */
+    private List<RecommendationJobDto> callAiServer(Resume resume, RecommendationRequest request) {
+        log.info("🚀 AI 서버로 추천 요청 전송: resumeId={}", resume.getResumeId());
+
+        try {
+            // 1. AI 요청 객체 생성 (AiRecommendRequest)
+            // 기본값 설정 - 필요한 경우 더 정교하게 매핑 가능
+            org.zerock.nextenter.ai.resume.dto.AiRecommendRequest aiRequest = new org.zerock.nextenter.ai.resume.dto.AiRecommendRequest();
+            aiRequest.setResumeId(resume.getResumeId());
+            aiRequest.setUserId(resume.getUserId());
+            
+            // ResumeAiRecommendService가 나머지 필드(resumeText 등)를 자동으로 DB에서 채워줍니다.
+            // 따라서 여기서는 ID만 넘겨도 충분합니다.
+
+            // 2. AI 서비스 호출 (실제 Python 서버 통신)
+            AiRecommendResponse aiResponse = resumeAiRecommendService.recommendAndSave(aiRequest);
+
+            if (aiResponse == null || aiResponse.getCompanies() == null) {
+                log.warn("⚠️ AI 서버 응답이 없거나 추천 결과가 비어있습니다.");
+                return List.of();
+            }
+
+            log.info("✅ AI 추천 완료: {}개 기업 반환됨 (등급: {})", 
+                    aiResponse.getCompanies().size(), aiResponse.getGrade());
+
+            // 3. 응답 변환 (AiRecommendResponse -> RecommendationJobDto)
+            return aiResponse.getCompanies().stream()
+                    .map(company -> RecommendationJobDto.builder()
+                            // ID는 임시로 생성 (실제 job 테이블이 있다면 거기서 가져와야 함)
+                            .jobId((long) company.getCompanyName().hashCode()) 
+                            .jobTitle(aiResponse.getTargetRole()) // AI가 분석한 타겟 직무 사용
+                            .companyName(company.getCompanyName())
+                            .score(company.getMatchScore().intValue())
+                            .grade(aiResponse.getGrade()) // 전체 이력서 등급 사용
+                            .matchReasons(List.of(company.getTier() + " 기업 추천", company.getMatchType() + " 매칭"))
+                            .missingSkills(company.getMissingSkills())
+                            .location("-") // Python 응답에 위치 정보가 없다면 기본값
+                            .experienceLevel(company.getTier()) // Tier를 경력 레벨 자리에 임시 표시
+                            .salary("-") // 연봉 정보 없음
+                            .build())
+                    .collect(Collectors.toList());
+
+        } catch (Exception e) {
+            log.error("❌ AI 서버 호출 중 오류 발생: {}", e.getMessage(), e);
+            // 에러 시 빈 리스트 반환 (또는 예외 던지기)
+            return List.of();
+        }
     }
 }

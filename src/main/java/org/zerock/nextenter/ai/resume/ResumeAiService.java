@@ -50,9 +50,31 @@ public class ResumeAiService {
             // 3. 데이터 준비 (위에서 수정한 DTO 로직 사용)
             Map<String, Object> aiRequestMap = request.toAiFormat();
 
-            // 4. JSON 문자열로 직접 변환 (눈으로 확인 가능)
-            String jsonPayload = objectMapper.writeValueAsString(aiRequestMap);
-            log.info("📦 [AI 전송 데이터]: {}", jsonPayload);
+            // 4. JSON 문자열로 직접 변환 (Pretty Print로 가독성 향상)
+            String jsonPayload = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(aiRequestMap);
+            log.info("📦 [AI 전송 데이터 (Pretty)]:\n{}", jsonPayload);
+
+            // raw_text 길이 확인 (디버깅용)
+            // 1. 최상위 레벨 raw_text 체크
+            String topLevelRawText = (String) aiRequestMap.get("raw_text");
+            if (topLevelRawText != null && !topLevelRawText.isEmpty()) {
+                log.info("📝 [최상위] raw_text 길이: {} 글자", topLevelRawText.length());
+                log.debug("📝 [최상위] raw_text 미리보기: {}", topLevelRawText.substring(0, Math.min(200, topLevelRawText.length())) + "...");
+            } else {
+                log.warn("⚠️ [최상위] raw_text가 비어있습니다!");
+            }
+            
+            // 2. resume_content 안의 raw_text 체크
+            @SuppressWarnings("unchecked")
+            Map<String, Object> resumeContent = (Map<String, Object>) aiRequestMap.get("resume_content");
+            if (resumeContent != null) {
+                String rawText = (String) resumeContent.get("raw_text");
+                if (rawText != null && !rawText.isEmpty()) {
+                    log.info("📝 [resume_content] raw_text 길이: {} 글자", rawText.length());
+                } else {
+                    log.warn("⚠️ [resume_content] raw_text가 비어있습니다!");
+                }
+            }
 
             // 5. HttpEntity 포장
             HttpEntity<String> requestEntity = new HttpEntity<>(jsonPayload, headers);

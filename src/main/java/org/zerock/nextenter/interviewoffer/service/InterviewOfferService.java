@@ -7,6 +7,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.zerock.nextenter.company.entity.Company;
 import org.zerock.nextenter.company.repository.CompanyRepository;
+import org.zerock.nextenter.apply.entity.Apply;
+import org.zerock.nextenter.apply.repository.ApplyRepository;
 import org.zerock.nextenter.interviewoffer.dto.InterviewOfferRequest;
 import org.zerock.nextenter.interviewoffer.dto.InterviewOfferResponse;
 import org.zerock.nextenter.interviewoffer.entity.InterviewOffer;
@@ -30,6 +32,7 @@ public class InterviewOfferService {
     private final JobPostingRepository jobPostingRepository;
     private final UserRepository userRepository;
     private final CompanyRepository companyRepository;
+    private final ApplyRepository applyRepository;
 
     @Autowired(required = false)
     private org.zerock.nextenter.notification.NotificationService notificationService;
@@ -54,6 +57,16 @@ public class InterviewOfferService {
                 .interviewStatus(InterviewOffer.InterviewStatus.OFFERED)
                 .build();
         offer = interviewOfferRepository.save(offer);
+
+        // ✅ applyId가 있으면 (지원자 목록에서 제안) Apply 상태를 서류합격으로 업데이트
+        if (request.getApplyId() != null) {
+            Apply apply = applyRepository.findById(request.getApplyId())
+                    .orElseThrow(() -> new IllegalArgumentException("지원 내역을 찾을 수 없습니다"));
+            apply.setDocumentStatus(Apply.DocumentStatus.PASSED);
+            apply.setReviewedAt(LocalDateTime.now());
+            applyRepository.save(apply);
+            log.info("✅ 지원자 목록에서 면접 제안 → Apply documentStatus를 PASSED로 업데이트: applyId={}", request.getApplyId());
+        }
 
         if (notificationService != null) {
             try {

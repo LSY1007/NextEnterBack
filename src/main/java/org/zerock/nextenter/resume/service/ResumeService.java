@@ -150,7 +150,13 @@ public class ResumeService {
     public ResumeResponse createResume(ResumeRequest request, Long userId) {
         log.info("이력서 생성 - userId: {}, title: {}", userId, request.getTitle());
 
-        // ✅ [추가] 프론트에서 넘어오는 값 확인 로그
+        // ✅ 5개 제한 검증
+        long resumeCount = resumeRepository.countByUserIdAndDeletedAtIsNull(userId);
+        if (resumeCount >= 5) {
+            throw new IllegalArgumentException("이력서는 최대 5개까지만 작성할 수 있습니다.");
+        }
+
+        // 프론트에서 넘어오는 값 확인 로그
         log.info("createResume personalInfo - resumeAddress={}, resumeDetailAddress={}",
                 request.getResumeAddress(), request.getResumeDetailAddress());
 
@@ -206,10 +212,6 @@ public class ResumeService {
     @Transactional
     public ResumeResponse updateResume(Long resumeId, ResumeRequest request, Long userId) {
         log.info("이력서 수정 - resumeId: {}, userId: {}", resumeId, userId);
-
-        // ✅ [추가] 프론트에서 넘어오는 값 확인 로그
-        log.info("updateResume personalInfo - resumeAddress={}, resumeDetailAddress={}",
-                request.getResumeAddress(), request.getResumeDetailAddress());
 
         Resume resume = resumeRepository
                 .findByResumeIdAndUserIdAndDeletedAtIsNull(resumeId, userId)
@@ -383,14 +385,14 @@ public class ResumeService {
             // User 정보 조회
             User user = userRepository.findById(resume.getUserId()).orElse(null);
 
-            // 이름 추출 (User 테이블에서)
+            // 이름 추출
             String realName = (user != null && user.getName() != null) ? user.getName() : "익명";
             String maskedName = maskName(realName);
 
             // 기술 스택 파싱
             List<String> skillsList = parseSkills(resume.getSkills());
 
-            // 경력 계산 (careers JSON에서)
+            // 경력 계산
             int experienceYears = calculateExperienceYearsFromJson(resume.getCareers());
 
             // 매칭 점수 계산
@@ -416,7 +418,7 @@ public class ResumeService {
                     .name(maskedName)
                     .jobCategory(resume.getJobCategory())
                     .skills(skillsList)
-                    .location("미지정") // 필요시 User 테이블에 추가
+                    .location("미지정")
                     .experienceYears(experienceYears)
                     .salaryRange("협의")
                     .matchScore(matchScore)
@@ -433,6 +435,9 @@ public class ResumeService {
      * ResumeListResponse 변환
      */
     private ResumeListResponse convertToListResponse(Resume resume) {
+        // ✅ 미완성 판단
+        boolean isIncomplete = checkIfIncomplete(resume);
+
         return ResumeListResponse.builder()
                 .resumeId(resume.getResumeId())
                 .title(resume.getTitle())
@@ -441,35 +446,94 @@ public class ResumeService {
                 .visibility(resume.getVisibility().name())
                 .viewCount(resume.getViewCount())
                 .status(resume.getStatus())
+                .isIncomplete(isIncomplete) // 결과 반영
                 .createdAt(resume.getCreatedAt())
                 .build();
     }
 
     /**
-     * ResumeResponse 변환 (User 정보 포함)
+     * ✅ [수정됨] 이력서 미완성 판단 로직 (원복)
+     * - 항목이 존재하는데(list size > 0), 필수 내용이 비어있으면 -> 미완성(true)
+     * - 항목 자체가 아예 없거나, 삭제해서 빈 리스트가 되면 -> 완성(false) 취급
+     */
+    private boolean checkIfIncomplete(Resume resume) {
+        try {
+            // 1. 필수 개인정보 체크 (이메일, 연락처가 없으면 미완성)
+            if (resume.getResumeEmail() == null || resume.getResumeEmail().trim().isEmpty()) {
+                return true;
+            }
+            if (resume.getResumePhone() == null || resume.getResumePhone().trim().isEmpty()) {
+                return true;
+            }
+
+            // (선택) 이름도 필수라면 아래 주석 해제
+            // if (resume.getResumeName() == null || resume.getResumeName().trim().isEmpty()) return true;
+
+            // 2. 자율 항목(학력 등)의 필수 필드 체크 (기존 로직)
+            if (hasEmptyRequiredFields(resume.getEducations(), "school")) return true;
+            if (hasEmptyRequiredFields(resume.getCareers(), "company")) return true;
+            if (hasEmptyRequiredFields(resume.getExperiences(), "title")) return true;
+            if (hasEmptyRequiredFields(resume.getCertificates(), "title")) return true;
+
+            return false;
+        } catch (Exception e) {
+            log.warn("미완성 판단 중 오류 발생: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    // ✅ JSON이 비어있는지 확인하는 헬퍼 메서드
+    private boolean isEmptyJson(String json) {
+        return json == null || json.trim().isEmpty() || json.trim().equals("[]");
+    }
+
+    /**
+     * JSON 배열에서 필수 필드가 비어있는 항목이 있는지 확인
+     */
+    private boolean hasEmptyRequiredFields(String jsonString, String requiredField) {
+        if (isEmptyJson(jsonString)) {
+            return false; // 항목이 없으면 "미완성 아님" (패스)
+        }
+
+        try {
+            JsonNode array = objectMapper.readTree(jsonString);
+            if (!array.isArray() || array.size() == 0) return false;
+
+            for (JsonNode item : array) {
+                // 항목은 있는데 필드가 없거나 비어있으면 -> 미완성
+                if (!item.has(requiredField)) return true;
+                String value = item.get(requiredField).asText();
+                if (value == null || value.trim().isEmpty()) return true;
+            }
+            return false;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * ResumeResponse 변환
      */
     private ResumeResponse convertToResponse(Resume resume) {
         // User 정보 조회
         User user = userRepository.findById(resume.getUserId()).orElse(null);
 
-        // ✅ 포트폴리오 목록 조회
+        // 포트폴리오 목록 조회
         List<Portfolio> portfolios = portfolioRepository.findByResumeIdOrderByDisplayOrder(resume.getResumeId());
 
-        // ✅ 자기소개서 목록 조회 (이 이력서와 연결된 자기소개서들만)
+        // 자기소개서 목록 조회
         List<CoverLetter> coverLetters = coverLetterRepository.findByResumeIdOrderByCreatedAtDesc(resume.getResumeId());
 
         ResumeResponse.ResumeResponseBuilder builder = ResumeResponse.builder()
                 .resumeId(resume.getResumeId())
                 .title(resume.getTitle())
                 .jobCategory(resume.getJobCategory())
-                // ===== User 테이블에서 가져온 정보 (하위호환용) =====
                 .userName(user != null ? user.getName() : null)
                 .userEmail(user != null ? user.getEmail() : null)
                 .userGender(user != null && user.getGender() != null ? user.getGender().name() : null)
                 .userPhone(user != null ? user.getPhone() : null)
                 .userAge(user != null ? user.getAge() : null)
                 .userBio(user != null ? user.getBio() : null)
-                // ===== Resume 테이블에 저장된 개인정보 =====
                 .resumeName(resume.getResumeName())
                 .resumeGender(resume.getResumeGender())
                 .resumeBirthDate(resume.getResumeBirthDate())
@@ -478,12 +542,10 @@ public class ResumeService {
                 .resumeAddress(resume.getResumeAddress())
                 .resumeDetailAddress(resume.getResumeDetailAddress())
                 .profileImage(resume.getProfileImage())
-                // ===== 분리된 섹션들 =====
                 .experiences(resume.getExperiences())
                 .certificates(resume.getCertificates())
                 .educations(resume.getEducations())
                 .careers(resume.getCareers())
-                // ===== 기존 필드들 =====
                 .extractedText(resume.getExtractedText())
                 .skills(resume.getSkills())
                 .resumeRecommend(resume.getResumeRecommend())
@@ -496,7 +558,6 @@ public class ResumeService {
                 .createdAt(resume.getCreatedAt())
                 .updatedAt(resume.getUpdatedAt());
 
-        // ✅ 포트폴리오 리스트 추가
         if (!portfolios.isEmpty()) {
             List<ResumeResponse.PortfolioInfo> portfolioInfoList = portfolios.stream()
                     .map(p -> ResumeResponse.PortfolioInfo.builder()
@@ -512,7 +573,6 @@ public class ResumeService {
             builder.portfolios(portfolioInfoList);
         }
 
-        // ✅ 자기소개서 리스트 추가
         if (!coverLetters.isEmpty()) {
             List<ResumeResponse.CoverLetterInfo> coverLetterInfoList = coverLetters.stream()
                     .map(c -> ResumeResponse.CoverLetterInfo.builder()
@@ -526,7 +586,6 @@ public class ResumeService {
             builder.coverLetters(coverLetterInfoList);
         }
 
-        // 하위 호환성: structuredData 포함
         if (resume.getStructuredData() != null) {
             builder.structuredData(resume.getStructuredData());
         }
@@ -534,30 +593,14 @@ public class ResumeService {
         return builder.build();
     }
 
-    /**
-     * 파일 확장자 추출
-     */
     private String getFileExtension(String filename) {
-        if (filename == null || !filename.contains(".")) {
-            return "";
-        }
+        if (filename == null || !filename.contains(".")) return "";
         return filename.substring(filename.lastIndexOf(".") + 1);
     }
 
-    /**
-     * 이름 마스킹
-     */
     private String maskName(String name) {
-        if (name == null || name.length() < 2) {
-            return "익명";
-        }
-
-        // 한글: 성만 표시 (예: "김철수" -> "김**")
-        if (isKorean(name.charAt(0))) {
-            return name.charAt(0) + "**";
-        }
-
-        // 영문: 첫 글자만 표시 (예: "John" -> "J**")
+        if (name == null || name.length() < 2) return "익명";
+        if (isKorean(name.charAt(0))) return name.charAt(0) + "**";
         return name.charAt(0) + "**";
     }
 
@@ -565,69 +608,47 @@ public class ResumeService {
         return (c >= '\uac00' && c <= '\ud7a3');
     }
 
-    /**
-     * 기술 스택 파싱
-     */
     private List<String> parseSkills(String skills) {
-        if (skills == null || skills.isEmpty()) {
-            return List.of();
-        }
+        if (skills == null || skills.isEmpty()) return List.of();
         return Arrays.stream(skills.split(","))
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
                 .collect(Collectors.toList());
     }
 
-    /**
-     * 경력 JSON에서 경력 년수 계산
-     */
     private int calculateExperienceYearsFromJson(String careersJson) {
-        if (careersJson == null || careersJson.isEmpty()) {
-            return 0;
-        }
-
+        if (careersJson == null || careersJson.isEmpty()) return 0;
         try {
             JsonNode careersArray = objectMapper.readTree(careersJson);
-
             if (careersArray.isArray() && careersArray.size() > 0) {
                 int totalMonths = 0;
-
                 for (JsonNode career : careersArray) {
                     if (career.has("period")) {
                         String period = career.get("period").asText();
                         totalMonths += parsePeriodToMonths(period);
                     }
                 }
-
                 return totalMonths / 12;
             }
         } catch (Exception e) {
             log.warn("경력 JSON 파싱 실패: {}", e.getMessage());
         }
-
         return 0;
     }
 
-    /**
-     * 기간 문자열을 개월수로 변환
-     */
     private int parsePeriodToMonths(String period) {
         try {
             String[] parts = period.split("~");
             if (parts.length != 2) return 0;
-
             String start = parts[0].trim().replace(" ", "");
             String end = parts[1].trim().replace(" ", "");
-
             String[] startParts = start.split("\\.");
             String[] endParts = end.split("\\.");
-
             if (startParts.length >= 2 && endParts.length >= 2) {
                 int startYear = Integer.parseInt(startParts[0]);
                 int startMonth = Integer.parseInt(startParts[1]);
                 int endYear = Integer.parseInt(endParts[0]);
                 int endMonth = Integer.parseInt(endParts[1]);
-
                 return (endYear - startYear) * 12 + (endMonth - startMonth);
             }
         } catch (Exception e) {
@@ -636,22 +657,9 @@ public class ResumeService {
         return 0;
     }
 
-    /**
-     * 파일 포함 이력서 생성
-     */
     @Transactional
-    public ResumeResponse createResumeWithFiles(
-            ResumeRequest request,
-            Long userId,
-            List<MultipartFile> portfolioFiles,
-            List<MultipartFile> coverLetterFiles) {
-
-        log.info("파일 포함 이력서 생성 - userId: {}, title: {}", userId, request.getTitle());
-
-        // 1. 기본 이력서 생성
+    public ResumeResponse createResumeWithFiles(ResumeRequest request, Long userId, List<MultipartFile> portfolioFiles, List<MultipartFile> coverLetterFiles) {
         ResumeResponse resume = createResume(request, userId);
-
-        // 2. 포트폴리오 파일 저장
         if (portfolioFiles != null && !portfolioFiles.isEmpty()) {
             int displayOrder = 0;
             for (MultipartFile file : portfolioFiles) {
@@ -659,10 +667,7 @@ public class ResumeService {
                     String filename = fileStorageService.saveFile(file);
                     String filePath = fileStorageService.getFileUrl(filename);
                     String fileType = getFileExtension(file.getOriginalFilename());
-
-                    Resume resumeEntity = resumeRepository.findById(resume.getResumeId())
-                            .orElseThrow(() -> new IllegalArgumentException("이력서를 찾을 수 없습니다"));
-
+                    Resume resumeEntity = resumeRepository.findById(resume.getResumeId()).orElseThrow(() -> new IllegalArgumentException("이력서를 찾을 수 없습니다"));
                     Portfolio portfolio = Portfolio.builder()
                             .resume(resumeEntity)
                             .fileName(file.getOriginalFilename())
@@ -671,74 +676,47 @@ public class ResumeService {
                             .fileSize(file.getSize())
                             .displayOrder(displayOrder++)
                             .build();
-
                     portfolioRepository.save(portfolio);
                 } catch (Exception e) {
                     log.error("포트폴리오 파일 저장 실패: {}", file.getOriginalFilename(), e);
                 }
             }
         }
-
-        // 3. 자기소개서 파일 저장
         if (coverLetterFiles != null && !coverLetterFiles.isEmpty()) {
             for (MultipartFile file : coverLetterFiles) {
                 try {
                     String filename = fileStorageService.saveFile(file);
                     String filePath = fileStorageService.getFileUrl(filename);
                     String fileType = getFileExtension(file.getOriginalFilename());
-
                     CoverLetter coverLetter = CoverLetter.builder()
                             .userId(userId)
-                            .resumeId(resume.getResumeId())  // ✅ resumeId 연결
+                            .resumeId(resume.getResumeId())
                             .title(file.getOriginalFilename())
                             .filePath(filePath)
                             .fileType(fileType)
                             .build();
-
                     coverLetterRepository.save(coverLetter);
                 } catch (Exception e) {
                     log.error("자기소개서 파일 저장 실패: {}", file.getOriginalFilename(), e);
                 }
             }
         }
-
-        // 4. 업데이트된 이력서 다시 조회
-        Resume updatedResume = resumeRepository.findById(resume.getResumeId())
-                .orElseThrow(() -> new IllegalArgumentException("이력서를 찾을 수 없습니다"));
-
+        Resume updatedResume = resumeRepository.findById(resume.getResumeId()).orElseThrow(() -> new IllegalArgumentException("이력서를 찾을 수 없습니다"));
         return convertToResponse(updatedResume);
     }
 
-    /**
-     * 파일 포함 이력서 수정
-     */
     @Transactional
-    public ResumeResponse updateResumeWithFiles(
-            Long resumeId,
-            ResumeRequest request,
-            Long userId,
-            List<MultipartFile> portfolioFiles,
-            List<MultipartFile> coverLetterFiles) {
-
-        log.info("파일 포함 이력서 수정 - resumeId: {}, userId: {}", resumeId, userId);
-
-        // 1. 기본 정보 업데이트
+    public ResumeResponse updateResumeWithFiles(Long resumeId, ResumeRequest request, Long userId, List<MultipartFile> portfolioFiles, List<MultipartFile> coverLetterFiles) {
         ResumeResponse resume = updateResume(resumeId, request, userId);
-
-        // 2. 새 포트폴리오 파일 추가
         if (portfolioFiles != null && !portfolioFiles.isEmpty()) {
             List<Portfolio> existingPortfolios = portfolioRepository.findByResumeIdOrderByDisplayOrder(resumeId);
             int displayOrder = existingPortfolios.size();
-
             for (MultipartFile file : portfolioFiles) {
                 try {
                     String filename = fileStorageService.saveFile(file);
                     String filePath = fileStorageService.getFileUrl(filename);
                     String fileType = getFileExtension(file.getOriginalFilename());
-
-                    Resume resumeEntity = resumeRepository.findById(resumeId)
-                            .orElseThrow(() -> new IllegalArgumentException("이력서를 찾을 수 없습니다"));
-
+                    Resume resumeEntity = resumeRepository.findById(resumeId).orElseThrow(() -> new IllegalArgumentException("이력서를 찾을 수 없습니다"));
                     Portfolio portfolio = Portfolio.builder()
                             .resume(resumeEntity)
                             .fileName(file.getOriginalFilename())
@@ -747,41 +725,32 @@ public class ResumeService {
                             .fileSize(file.getSize())
                             .displayOrder(displayOrder++)
                             .build();
-
                     portfolioRepository.save(portfolio);
                 } catch (Exception e) {
                     log.error("포트폴리오 파일 저장 실패: {}", file.getOriginalFilename(), e);
                 }
             }
         }
-
-        // 3. 새 자기소개서 파일 추가
         if (coverLetterFiles != null && !coverLetterFiles.isEmpty()) {
             for (MultipartFile file : coverLetterFiles) {
                 try {
                     String filename = fileStorageService.saveFile(file);
                     String filePath = fileStorageService.getFileUrl(filename);
                     String fileType = getFileExtension(file.getOriginalFilename());
-
                     CoverLetter coverLetter = CoverLetter.builder()
                             .userId(userId)
-                            .resumeId(resumeId)  // ✅ resumeId 연결
+                            .resumeId(resumeId)
                             .title(file.getOriginalFilename())
                             .filePath(filePath)
                             .fileType(fileType)
                             .build();
-
                     coverLetterRepository.save(coverLetter);
                 } catch (Exception e) {
                     log.error("자기소개서 파일 저장 실패: {}", file.getOriginalFilename(), e);
                 }
             }
         }
-
-        // 4. 업데이트된 이력서 다시 조회
-        Resume updatedResume = resumeRepository.findById(resumeId)
-                .orElseThrow(() -> new IllegalArgumentException("이력서를 찾을 수 없습니다"));
-
+        Resume updatedResume = resumeRepository.findById(resumeId).orElseThrow(() -> new IllegalArgumentException("이력서를 찾을 수 없습니다"));
         return convertToResponse(updatedResume);
     }
 }

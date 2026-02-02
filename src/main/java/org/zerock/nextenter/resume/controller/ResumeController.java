@@ -18,6 +18,7 @@ import org.zerock.nextenter.resume.dto.*;
 import org.zerock.nextenter.resume.entity.TalentContact;
 import org.zerock.nextenter.resume.service.PortfolioService;
 import org.zerock.nextenter.resume.service.ResumeService;
+import org.zerock.nextenter.resume.service.StandalonePortfolioService;
 import org.zerock.nextenter.resume.service.TalentService;
 
 import java.nio.charset.StandardCharsets;
@@ -35,6 +36,7 @@ public class ResumeController {
         private final ResumeService resumeService;
         private final PortfolioService portfolioService;
         private final TalentService talentService;
+        private final StandalonePortfolioService standalonePortfolioService;
 
         // ==================== 인재 검색 API ====================
 
@@ -91,16 +93,49 @@ public class ResumeController {
                 return ResponseEntity.ok(resume);
         }
 
-        @Operation(summary = "이력서 파일 업로드")
+        @Operation(summary = "이력서 파일 업로드", description = "PDF/DOCX/HWP 형식의 이력서 파일을 업로드합니다. " +
+                        "이것은 새로운 Resume 레코드를 생성합니다. " +
+                        "기존 이력서에 추가 파일을 첨부하려면 Portfolio 업로드를 사용하세요.")
         @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
         public ResponseEntity<ResumeResponse> uploadResume(
                         @Parameter(description = "업로드할 이력서 파일 (HWP, PDF, DOCX, XLSX)", required = true) @RequestParam("file") MultipartFile file,
                         @Parameter(description = "사용자 ID", required = true, example = "1") @RequestHeader("userId") Long userId) {
-                log.info("POST /api/resume/upload - userId: {}, filename: {}",
-                                userId, file.getOriginalFilename());
+
+                log.info("========================================");
+                log.info("📤 [UPLOAD] 이력서 파일 업로드 요청 수신");
+                log.info("📤 [UPLOAD] userId: {}", userId);
+                log.info("📤 [UPLOAD] filename: {}", file.getOriginalFilename());
+                log.info("📤 [UPLOAD] size: {} bytes", file.getSize());
+                log.info("📤 [UPLOAD] contentType: {}", file.getContentType());
+                log.info("========================================");
 
                 ResumeResponse resume = resumeService.uploadResume(file, userId);
+
+                log.info("✅ [UPLOAD] 업로드 성공 - resumeId: {}", resume.getResumeId());
+
                 return ResponseEntity.status(HttpStatus.CREATED).body(resume);
+        }
+
+        @Operation(summary = "포트폴리오만 업로드", description = "Resume 없이 포트폴리오 파일만 업로드합니다. " +
+                        "내부적으로 임시 Resume을 자동 생성하고 Portfolio를 첨부합니다. " +
+                        "프런트엔드는 resumeId를 몰라도 됩니다.")
+        @PostMapping(value = "/upload-portfolio", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+        public ResponseEntity<PortfolioUploadResponse> uploadPortfolioOnly(
+                        @Parameter(description = "업로드할 포트폴리오 파일", required = true) @RequestParam("file") MultipartFile file,
+                        @Parameter(description = "포트폴리오 설명") @RequestParam(value = "description", required = false) String description,
+                        @Parameter(description = "사용자 ID", required = true) @RequestHeader("userId") Long userId) {
+
+                log.info("========================================");
+                log.info("📦 [UPLOAD-PORTFOLIO-ONLY] 포트폴리오 단독 업로드 요청");
+                log.info("📦 [UPLOAD-PORTFOLIO-ONLY] userId: {}, filename: {}", userId, file.getOriginalFilename());
+                log.info("========================================");
+
+                PortfolioUploadResponse response = standalonePortfolioService.uploadPortfolioOnly(
+                                userId, file, description);
+
+                log.info("✅ [UPLOAD-PORTFOLIO-ONLY] 업로드 성공 - portfolioId: {}", response.getPortfolioId());
+
+                return ResponseEntity.status(HttpStatus.CREATED).body(response);
         }
 
         @Operation(summary = "이력서 생성")
@@ -149,31 +184,31 @@ public class ResumeController {
                 return ResponseEntity.ok(response);
         }
 
-    @Operation(summary = "이력서 파일 다운로드", description = "업로드된 이력서 파일을 다운로드합니다")
-    @GetMapping("/{id}/download")
-    public ResponseEntity<Resource> downloadResumeFile(
-            @Parameter(description = "이력서 ID", required = true, example = "1") @PathVariable Long id,
-            @Parameter(description = "사용자 ID", required = true, example = "1") @RequestHeader("userId") Long userId) {
-        log.info("GET /api/resume/{}/download - userId: {}", id, userId);
+        @Operation(summary = "이력서 파일 다운로드", description = "업로드된 이력서 파일을 다운로드합니다")
+        @GetMapping("/{id}/download")
+        public ResponseEntity<Resource> downloadResumeFile(
+                        @Parameter(description = "이력서 ID", required = true, example = "1") @PathVariable Long id,
+                        @Parameter(description = "사용자 ID", required = true, example = "1") @RequestHeader("userId") Long userId) {
+                log.info("GET /api/resume/{}/download - userId: {}", id, userId);
 
-        // 이력서 파일 다운로드
-        Resource resource = resumeService.downloadResumeFile(id, userId);
+                // 이력서 파일 다운로드
+                Resource resource = resumeService.downloadResumeFile(id, userId);
 
-        // 이력서 정보 조회 (파일명 가져오기)
-        ResumeResponse resume = resumeService.getResumeDetail(id, userId);
-        String fileName = resume.getTitle() + "." + resume.getFileType();
+                // 이력서 정보 조회 (파일명 가져오기)
+                ResumeResponse resume = resumeService.getResumeDetail(id, userId);
+                String fileName = resume.getTitle() + "." + resume.getFileType();
 
-        // 한글 파일명 인코딩
-        String encodedFileName = new String(
-                fileName.getBytes(StandardCharsets.UTF_8),
-                StandardCharsets.ISO_8859_1);
+                // 한글 파일명 인코딩
+                String encodedFileName = new String(
+                                fileName.getBytes(StandardCharsets.UTF_8),
+                                StandardCharsets.ISO_8859_1);
 
-        return ResponseEntity.ok()
-                .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=\"" + encodedFileName + "\"")
-                .body(resource);
-    }
+                return ResponseEntity.ok()
+                                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                                .header(HttpHeaders.CONTENT_DISPOSITION,
+                                                "attachment; filename=\"" + encodedFileName + "\"")
+                                .body(resource);
+        }
 
         @Operation(summary = "스크랩한 인재 목록 조회", description = "기업 회원이 저장한 인재 목록을 조회합니다")
         @GetMapping("/saved")
@@ -303,18 +338,27 @@ public class ResumeController {
 
         // ==================== 포트폴리오 API ====================
 
-        @Operation(summary = "포트폴리오 파일 업로드", description = "이력서에 포트폴리오 파일을 업로드합니다")
+        @Operation(summary = "포트폴리오 파일 업로드", description = "기존 이력서(Resume)에 포트폴리오 파일을 첨부합니다. " +
+                        "⚠️ 주의: 이것은 새로운 Resume을 생성하지 않고, 기존 Resume에 Portfolio를 추가합니다. " +
+                        "먼저 Resume을 생성하거나 업로드한 후 이 API를 호출하세요.")
         @PostMapping(value = "/{resumeId}/portfolios", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
         public ResponseEntity<PortfolioUploadResponse> uploadPortfolio(
                         @Parameter(description = "이력서 ID", required = true) @PathVariable Long resumeId,
                         @Parameter(description = "업로드할 포트폴리오 파일", required = true) @RequestParam("file") MultipartFile file,
                         @Parameter(description = "포트폴리오 설명") @RequestParam(value = "description", required = false) String description,
                         @Parameter(description = "사용자 ID", required = true) @RequestHeader("userId") Long userId) {
-                log.info("POST /api/resume/{}/portfolios - userId: {}, filename: {}",
-                                resumeId, userId, file.getOriginalFilename());
+
+                log.info("========================================");
+                log.info("📁 [PORTFOLIO] 포트폴리오 파일 업로드 요청");
+                log.info("📁 [PORTFOLIO] resumeId: {}, userId: {}", resumeId, userId);
+                log.info("📁 [PORTFOLIO] filename: {}", file.getOriginalFilename());
+                log.info("📁 [PORTFOLIO] ⚠️ 이것은 Resume이 아닌 Portfolio입니다!");
+                log.info("========================================");
 
                 PortfolioUploadResponse response = portfolioService.uploadPortfolio(
                                 userId, resumeId, file, description);
+
+                log.info("✅ [PORTFOLIO] 업로드 성공 - portfolioId: {}", response.getPortfolioId());
 
                 return ResponseEntity.status(HttpStatus.CREATED).body(response);
         }
@@ -402,44 +446,45 @@ public class ResumeController {
                                 .body(resource);
         }
 
-    /**
-     * 파일 포함 이력서 생성
-     */
-    @PostMapping("/create-with-files")
-    public ResponseEntity<ResumeResponse> createResumeWithFiles(
-            @RequestPart("request") @Valid ResumeRequest request,
-            @RequestPart(value = "portfolioFiles", required = false) List<MultipartFile> portfolioFiles,
-            @RequestPart(value = "coverLetterFiles", required = false) List<MultipartFile> coverLetterFiles,
-            @RequestHeader("userId") Long userId) {
+        /**
+         * 파일 포함 이력서 생성 (이력서 파일 PDF/DOCX → 텍스트 추출 후 DB 저장)
+         */
+        @PostMapping("/create-with-files")
+        public ResponseEntity<ResumeResponse> createResumeWithFiles(
+                        @RequestPart("request") @Valid ResumeRequest request,
+                        @RequestPart(value = "resumeFiles", required = false) List<MultipartFile> resumeFiles,
+                        @RequestPart(value = "portfolioFiles", required = false) List<MultipartFile> portfolioFiles,
+                        @RequestPart(value = "coverLetterFiles", required = false) List<MultipartFile> coverLetterFiles,
+                        @RequestHeader("userId") Long userId) {
 
-        log.info("파일 포함 이력서 생성 요청 - userId: {}, title: {}", userId, request.getTitle());
-        log.info("포트폴리오 파일 개수: {}", portfolioFiles != null ? portfolioFiles.size() : 0);
-        log.info("자기소개서 파일 개수: {}", coverLetterFiles != null ? coverLetterFiles.size() : 0);
+                log.info("파일 포함 이력서 생성 요청 - userId: {}, title: {}", userId, request.getTitle());
+                log.info("이력서 파일 개수: {}", resumeFiles != null ? resumeFiles.size() : 0);
+                log.info("포트폴리오 파일 개수: {}", portfolioFiles != null ? portfolioFiles.size() : 0);
+                log.info("자기소개서 파일 개수: {}", coverLetterFiles != null ? coverLetterFiles.size() : 0);
 
-        ResumeResponse response = resumeService.createResumeWithFiles(
-                request, userId, portfolioFiles, coverLetterFiles
-        );
+                ResumeResponse response = resumeService.createResumeWithFiles(
+                                request, userId, resumeFiles, portfolioFiles, coverLetterFiles);
 
-        return ResponseEntity.ok(response);
-    }
+                return ResponseEntity.ok(response);
+        }
 
-    /**
-     * 파일 포함 이력서 수정
-     */
-    @PutMapping("/{resumeId}/update-with-files")
-    public ResponseEntity<ResumeResponse> updateResumeWithFiles(
-            @PathVariable Long resumeId,
-            @RequestPart("request") @Valid ResumeRequest request,
-            @RequestPart(value = "portfolioFiles", required = false) List<MultipartFile> portfolioFiles,
-            @RequestPart(value = "coverLetterFiles", required = false) List<MultipartFile> coverLetterFiles,
-            @RequestHeader("userId") Long userId) {
+        /**
+         * 파일 포함 이력서 수정 (이력서 파일 있으면 텍스트 재추출)
+         */
+        @PutMapping("/{resumeId}/update-with-files")
+        public ResponseEntity<ResumeResponse> updateResumeWithFiles(
+                        @PathVariable Long resumeId,
+                        @RequestPart("request") @Valid ResumeRequest request,
+                        @RequestPart(value = "resumeFiles", required = false) List<MultipartFile> resumeFiles,
+                        @RequestPart(value = "portfolioFiles", required = false) List<MultipartFile> portfolioFiles,
+                        @RequestPart(value = "coverLetterFiles", required = false) List<MultipartFile> coverLetterFiles,
+                        @RequestHeader("userId") Long userId) {
 
-        log.info("파일 포함 이력서 수정 요청 - resumeId: {}, userId: {}", resumeId, userId);
+                log.info("파일 포함 이력서 수정 요청 - resumeId: {}, userId: {}", resumeId, userId);
 
-        ResumeResponse response = resumeService.updateResumeWithFiles(
-                resumeId, request, userId, portfolioFiles, coverLetterFiles
-        );
+                ResumeResponse response = resumeService.updateResumeWithFiles(
+                                resumeId, request, userId, resumeFiles, portfolioFiles, coverLetterFiles);
 
-        return ResponseEntity.ok(response);
-    }
+                return ResponseEntity.ok(response);
+        }
 }

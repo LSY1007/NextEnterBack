@@ -41,6 +41,8 @@ public class ResumeService {
 
     private final ResumeRepository resumeRepository;
     private final FileStorageService fileStorageService;
+    private final ResumeFileTextExtractor resumeFileTextExtractor;
+    private final ResumeStructureParser resumeStructureParser;
     private final UserRepository userRepository;
     private final TalentContactRepository talentContactRepository;
     private final PortfolioRepository portfolioRepository;
@@ -53,10 +55,22 @@ public class ResumeService {
      * 이력서 목록 조회
      */
     public List<ResumeListResponse> getResumeList(Long userId) {
-        log.info("이력서 목록 조회 - userId: {}", userId);
+        log.info("========================================");
+        log.info("📋 [LIST] 이력서 목록 조회 - userId: {}", userId);
 
         List<Resume> resumes = resumeRepository
                 .findByUserIdAndDeletedAtIsNullOrderByCreatedAtDesc(userId);
+
+        log.info("📋 [LIST] 조회된 이력서 개수: {}", resumes.size());
+
+        if (!resumes.isEmpty()) {
+            for (Resume r : resumes) {
+                log.info("📋 [LIST] - resumeId: {}, title: {}, filePath: {}, deletedAt: {}",
+                        r.getResumeId(), r.getTitle(), r.getFilePath(), r.getDeletedAt());
+            }
+        }
+
+        log.info("========================================");
 
         return resumes.stream()
                 .map(this::convertToListResponse)
@@ -129,7 +143,7 @@ public class ResumeService {
                     .title(file.getOriginalFilename())
                     .filePath(filePath)
                     .fileType(fileType)
-                    .status("DRAFT")  // AI 처리 전이므로 DRAFT
+                    .status("DRAFT") // AI 처리 전이므로 DRAFT
                     .build();
 
             resume = resumeRepository.save(resume);
@@ -396,7 +410,7 @@ public class ResumeService {
             int experienceYears = calculateExperienceYearsFromJson(resume.getCareers());
 
             // 매칭 점수 계산
-            int matchScore = 80 + (int)(Math.random() * 16);
+            int matchScore = 80 + (int) (Math.random() * 16);
 
             // 연락 상태 확인
             String contactStatus = null;
@@ -438,6 +452,9 @@ public class ResumeService {
         // ✅ 미완성 판단
         boolean isIncomplete = checkIfIncomplete(resume);
 
+        // [NEW] 파일 기반 이력서 여부 판단
+        boolean isFileBased = resume.getFilePath() != null && !resume.getFilePath().trim().isEmpty();
+
         return ResumeListResponse.builder()
                 .resumeId(resume.getResumeId())
                 .title(resume.getTitle())
@@ -446,18 +463,28 @@ public class ResumeService {
                 .visibility(resume.getVisibility().name())
                 .viewCount(resume.getViewCount())
                 .status(resume.getStatus())
-                .isIncomplete(isIncomplete) // 결과 반영
+                .isIncomplete(isIncomplete)
                 .createdAt(resume.getCreatedAt())
+                // [NEW] 파일 정보 추가
+                .filePath(resume.getFilePath())
+                .fileType(resume.getFileType())
+                .isFileBased(isFileBased)
                 .build();
     }
 
     /**
-     * ✅ [수정됨] 이력서 미완성 판단 로직 (원복)
+     * ✅ [수정됨] 이력서 미완성 판단 로직
+     * - 파일 기반 이력서(PDF/DOCX)는 파일 자체에 정보가 있으므로 완성으로 간주
      * - 항목이 존재하는데(list size > 0), 필수 내용이 비어있으면 -> 미완성(true)
      * - 항목 자체가 아예 없거나, 삭제해서 빈 리스트가 되면 -> 완성(false) 취급
      */
     private boolean checkIfIncomplete(Resume resume) {
         try {
+            // [NEW] 파일 기반 이력서는 완성으로 간주 (파일 내에 정보가 포함되어 있음)
+            if (resume.getFilePath() != null && !resume.getFilePath().trim().isEmpty()) {
+                return false;
+            }
+
             // 1. 필수 개인정보 체크 (이메일, 연락처가 없으면 미완성)
             if (resume.getResumeEmail() == null || resume.getResumeEmail().trim().isEmpty()) {
                 return true;
@@ -467,13 +494,18 @@ public class ResumeService {
             }
 
             // (선택) 이름도 필수라면 아래 주석 해제
-            // if (resume.getResumeName() == null || resume.getResumeName().trim().isEmpty()) return true;
+            // if (resume.getResumeName() == null ||
+            // resume.getResumeName().trim().isEmpty()) return true;
 
             // 2. 자율 항목(학력 등)의 필수 필드 체크 (기존 로직)
-            if (hasEmptyRequiredFields(resume.getEducations(), "school")) return true;
-            if (hasEmptyRequiredFields(resume.getCareers(), "company")) return true;
-            if (hasEmptyRequiredFields(resume.getExperiences(), "title")) return true;
-            if (hasEmptyRequiredFields(resume.getCertificates(), "title")) return true;
+            if (hasEmptyRequiredFields(resume.getEducations(), "school"))
+                return true;
+            if (hasEmptyRequiredFields(resume.getCareers(), "company"))
+                return true;
+            if (hasEmptyRequiredFields(resume.getExperiences(), "title"))
+                return true;
+            if (hasEmptyRequiredFields(resume.getCertificates(), "title"))
+                return true;
 
             return false;
         } catch (Exception e) {
@@ -497,13 +529,16 @@ public class ResumeService {
 
         try {
             JsonNode array = objectMapper.readTree(jsonString);
-            if (!array.isArray() || array.size() == 0) return false;
+            if (!array.isArray() || array.size() == 0)
+                return false;
 
             for (JsonNode item : array) {
                 // 항목은 있는데 필드가 없거나 비어있으면 -> 미완성
-                if (!item.has(requiredField)) return true;
+                if (!item.has(requiredField))
+                    return true;
                 String value = item.get(requiredField).asText();
-                if (value == null || value.trim().isEmpty()) return true;
+                if (value == null || value.trim().isEmpty())
+                    return true;
             }
             return false;
         } catch (Exception e) {
@@ -594,13 +629,16 @@ public class ResumeService {
     }
 
     private String getFileExtension(String filename) {
-        if (filename == null || !filename.contains(".")) return "";
+        if (filename == null || !filename.contains("."))
+            return "";
         return filename.substring(filename.lastIndexOf(".") + 1);
     }
 
     private String maskName(String name) {
-        if (name == null || name.length() < 2) return "익명";
-        if (isKorean(name.charAt(0))) return name.charAt(0) + "**";
+        if (name == null || name.length() < 2)
+            return "익명";
+        if (isKorean(name.charAt(0)))
+            return name.charAt(0) + "**";
         return name.charAt(0) + "**";
     }
 
@@ -609,7 +647,8 @@ public class ResumeService {
     }
 
     private List<String> parseSkills(String skills) {
-        if (skills == null || skills.isEmpty()) return List.of();
+        if (skills == null || skills.isEmpty())
+            return List.of();
         return Arrays.stream(skills.split(","))
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
@@ -617,7 +656,8 @@ public class ResumeService {
     }
 
     private int calculateExperienceYearsFromJson(String careersJson) {
-        if (careersJson == null || careersJson.isEmpty()) return 0;
+        if (careersJson == null || careersJson.isEmpty())
+            return 0;
         try {
             JsonNode careersArray = objectMapper.readTree(careersJson);
             if (careersArray.isArray() && careersArray.size() > 0) {
@@ -639,7 +679,8 @@ public class ResumeService {
     private int parsePeriodToMonths(String period) {
         try {
             String[] parts = period.split("~");
-            if (parts.length != 2) return 0;
+            if (parts.length != 2)
+                return 0;
             String start = parts[0].trim().replace(" ", "");
             String end = parts[1].trim().replace(" ", "");
             String[] startParts = start.split("\\.");
@@ -658,8 +699,39 @@ public class ResumeService {
     }
 
     @Transactional
-    public ResumeResponse createResumeWithFiles(ResumeRequest request, Long userId, List<MultipartFile> portfolioFiles, List<MultipartFile> coverLetterFiles) {
+    public ResumeResponse createResumeWithFiles(ResumeRequest request, Long userId, List<MultipartFile> resumeFiles,
+            List<MultipartFile> portfolioFiles, List<MultipartFile> coverLetterFiles) {
         ResumeResponse resume = createResume(request, userId);
+        Resume resumeEntity = resumeRepository.findById(resume.getResumeId())
+                .orElseThrow(() -> new IllegalArgumentException("이력서를 찾을 수 없습니다"));
+
+        // 이력서 파일(첫 번째) 저장 + 텍스트 추출 → extractedText, filePath 저장
+        if (resumeFiles != null && !resumeFiles.isEmpty()) {
+            MultipartFile firstResumeFile = resumeFiles.get(0);
+            try {
+                String filename = fileStorageService.saveFile(firstResumeFile);
+                String filePath = fileStorageService.getFileUrl(filename);
+                String fileType = getFileExtension(firstResumeFile.getOriginalFilename());
+                resumeEntity.setFilePath(filePath);
+                resumeEntity.setFileType(fileType);
+                String extractedText = resumeFileTextExtractor.extractFromFile(firstResumeFile);
+                if (extractedText != null && !extractedText.isBlank()) {
+                    resumeEntity.setExtractedText(extractedText);
+                    ResumeStructureParser.ParsedResumeStructure parsed = resumeStructureParser.parse(extractedText);
+                    resumeEntity.setSkills(parsed.getSkills());
+                    resumeEntity.setEducations(parsed.getEducations());
+                    resumeEntity.setCareers(parsed.getCareers());
+                    resumeEntity.setExperiences(parsed.getExperiences());
+                    log.info("이력서 파일 텍스트 추출 및 구조화 완료 - resumeId: {}, 길이: {} chars", resume.getResumeId(), extractedText.length());
+                } else {
+                    log.warn("이력서 파일 텍스트 추출 결과 없음 - resumeId: {}", resume.getResumeId());
+                }
+                resumeRepository.save(resumeEntity);
+            } catch (Exception e) {
+                log.error("이력서 파일 저장/추출 실패: {}", firstResumeFile.getOriginalFilename(), e);
+            }
+        }
+
         if (portfolioFiles != null && !portfolioFiles.isEmpty()) {
             int displayOrder = 0;
             for (MultipartFile file : portfolioFiles) {
@@ -667,7 +739,6 @@ public class ResumeService {
                     String filename = fileStorageService.saveFile(file);
                     String filePath = fileStorageService.getFileUrl(filename);
                     String fileType = getFileExtension(file.getOriginalFilename());
-                    Resume resumeEntity = resumeRepository.findById(resume.getResumeId()).orElseThrow(() -> new IllegalArgumentException("이력서를 찾을 수 없습니다"));
                     Portfolio portfolio = Portfolio.builder()
                             .resume(resumeEntity)
                             .fileName(file.getOriginalFilename())
@@ -701,13 +772,43 @@ public class ResumeService {
                 }
             }
         }
-        Resume updatedResume = resumeRepository.findById(resume.getResumeId()).orElseThrow(() -> new IllegalArgumentException("이력서를 찾을 수 없습니다"));
+        Resume updatedResume = resumeRepository.findById(resume.getResumeId())
+                .orElseThrow(() -> new IllegalArgumentException("이력서를 찾을 수 없습니다"));
         return convertToResponse(updatedResume);
     }
 
     @Transactional
-    public ResumeResponse updateResumeWithFiles(Long resumeId, ResumeRequest request, Long userId, List<MultipartFile> portfolioFiles, List<MultipartFile> coverLetterFiles) {
+    public ResumeResponse updateResumeWithFiles(Long resumeId, ResumeRequest request, Long userId,
+            List<MultipartFile> resumeFiles, List<MultipartFile> portfolioFiles, List<MultipartFile> coverLetterFiles) {
         ResumeResponse resume = updateResume(resumeId, request, userId);
+        Resume resumeEntity = resumeRepository.findById(resumeId)
+                .orElseThrow(() -> new IllegalArgumentException("이력서를 찾을 수 없습니다"));
+
+        // 이력서 파일(첫 번째) 있으면 저장 + 텍스트 재추출
+        if (resumeFiles != null && !resumeFiles.isEmpty()) {
+            MultipartFile firstResumeFile = resumeFiles.get(0);
+            try {
+                String filename = fileStorageService.saveFile(firstResumeFile);
+                String filePath = fileStorageService.getFileUrl(filename);
+                String fileType = getFileExtension(firstResumeFile.getOriginalFilename());
+                resumeEntity.setFilePath(filePath);
+                resumeEntity.setFileType(fileType);
+                String extractedText = resumeFileTextExtractor.extractFromFile(firstResumeFile);
+                if (extractedText != null && !extractedText.isBlank()) {
+                    resumeEntity.setExtractedText(extractedText);
+                    ResumeStructureParser.ParsedResumeStructure parsed = resumeStructureParser.parse(extractedText);
+                    resumeEntity.setSkills(parsed.getSkills());
+                    resumeEntity.setEducations(parsed.getEducations());
+                    resumeEntity.setCareers(parsed.getCareers());
+                    resumeEntity.setExperiences(parsed.getExperiences());
+                    log.info("이력서 파일 텍스트 재추출 및 구조화 완료 - resumeId: {}, 길이: {} chars", resumeId, extractedText.length());
+                }
+                resumeRepository.save(resumeEntity);
+            } catch (Exception e) {
+                log.error("이력서 파일 저장/추출 실패: {}", firstResumeFile.getOriginalFilename(), e);
+            }
+        }
+
         if (portfolioFiles != null && !portfolioFiles.isEmpty()) {
             List<Portfolio> existingPortfolios = portfolioRepository.findByResumeIdOrderByDisplayOrder(resumeId);
             int displayOrder = existingPortfolios.size();
@@ -716,7 +817,6 @@ public class ResumeService {
                     String filename = fileStorageService.saveFile(file);
                     String filePath = fileStorageService.getFileUrl(filename);
                     String fileType = getFileExtension(file.getOriginalFilename());
-                    Resume resumeEntity = resumeRepository.findById(resumeId).orElseThrow(() -> new IllegalArgumentException("이력서를 찾을 수 없습니다"));
                     Portfolio portfolio = Portfolio.builder()
                             .resume(resumeEntity)
                             .fileName(file.getOriginalFilename())
@@ -750,7 +850,8 @@ public class ResumeService {
                 }
             }
         }
-        Resume updatedResume = resumeRepository.findById(resumeId).orElseThrow(() -> new IllegalArgumentException("이력서를 찾을 수 없습니다"));
+        Resume updatedResume = resumeRepository.findById(resumeId)
+                .orElseThrow(() -> new IllegalArgumentException("이력서를 찾을 수 없습니다"));
         return convertToResponse(updatedResume);
     }
 }

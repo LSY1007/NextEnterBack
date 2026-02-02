@@ -44,6 +44,7 @@ dependencies {
 // Database
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     runtimeOnly 'com.mysql:mysql-connector-j'
+    // runtimeOnly 'com.h2database:h2'  // noH2: H2 비활성화
 
 // Lombok
     compileOnly 'org.projectlombok:lombok'
@@ -65,6 +66,9 @@ dependencies {
 // JSON 처리 (Jackson)
     implementation 'com.fasterxml.jackson.core:jackson-databind'
 
+// PDF 텍스트 추출 (이력서 파일)
+    implementation 'org.apache.pdfbox:pdfbox:3.0.3'
+
 // Test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
@@ -73,6 +77,9 @@ dependencies {
 
 tasks.named('test') {
     useJUnitPlatform()
+    jvmArgs "-Djdk.attach.allowAttachSelf=true"
+    maxHeapSize = '1g'           // 512m → 1g (OOM 방지)
+    maxParallelForks = 2         // 병렬 워커 수 제한
 }
 
 // 컴파일 옵션

@@ -30,14 +30,4 @@ public class InterviewStartRequest {
 
     @Schema(description = "총 턴 수 (기본값: 5)", example = "5")
     private Integer totalTurns;
-
-    // --- Proxy/Pass-through Fields (Optional) ---
-    @Schema(description = "이력서 내용 (프론트엔드 전달용, 없을 시 DB 조회)", hidden = true)
-    private java.util.Map<String, Object> resumeContent;
-
-    @Schema(description = "포트폴리오 내용 (프론트엔드 전달용)", hidden = true)
-    private java.util.Map<String, Object> portfolio;
-
-    @Schema(description = "포트폴리오 파일 경로 목록 (프론트엔드 전달용)", hidden = true)
-    private java.util.List<String> portfolioFiles;
 }

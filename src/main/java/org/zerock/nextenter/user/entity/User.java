@@ -5,14 +5,9 @@ import lombok.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "user",
-        uniqueConstraints = {
-                @UniqueConstraint(
-                        name = "uk_email_provider",
-                        columnNames = {"email", "provider"}
-                )
-        }
-)
+@Table(name = "users", uniqueConstraints = {
+        @UniqueConstraint(name = "uk_email_provider", columnNames = { "email", "provider" })
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -29,7 +24,7 @@ public class User {
     @Column(nullable = false, length = 100)
     private String email;
 
-    @Column(length = 255)  // 소셜 로그인은 비밀번호 null 가능
+    @Column(length = 255) // 소셜 로그인은 비밀번호 null 가능
     private String password;
 
     @Column(nullable = false, length = 50)

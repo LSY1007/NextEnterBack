@@ -338,6 +338,9 @@ public class ApplyService {
                 .coverLetterTitle(coverLetterTitle)
                 .coverLetterContent(coverLetterContent)
                 .status(convertToLegacyStatus(apply))
+                // ✅ documentStatus와 finalStatus 추가
+                .documentStatus(apply.getDocumentStatus() != null ? apply.getDocumentStatus().name() : null)
+                .finalStatus(apply.getFinalStatus() != null ? apply.getFinalStatus().name() : null)
                 .aiScore(apply.getAiScore())
                 .notes(apply.getNotes())
                 .appliedAt(apply.getAppliedAt())

@@ -50,7 +50,9 @@ public class ApplyResponse {
     private String coverLetterContent;
 
     // 지원 정보
-    private String status;
+    private String status; // 레거시 호환용 (PENDING, REVIEWING, ACCEPTED, REJECTED, CANCELED)
+    private String documentStatus; // 서류 상태 (PENDING, REVIEWING, PASSED, REJECTED, CANCELED)
+    private String finalStatus; // 최종 결과 (PASSED, REJECTED, CANCELED)
     private Integer aiScore;
     private String notes;
 

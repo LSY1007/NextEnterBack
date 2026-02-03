@@ -21,8 +21,13 @@ public class InterviewQuestionResponse {
     // --- AI Rich Metadata ---
     private String reactionType;
     private String reactionText;
-    private java.util.Map<String, Object> aiSystemReport; // Competency scores, etc.
-    private java.util.Map<String, Object> aiEvaluation;
-    private java.util.List<String> requestedEvidence;
+    @Builder.Default
+    private java.util.Map<String, Object> aiSystemReport = new java.util.HashMap<>(); // Competency scores, etc.
+    
+    @Builder.Default
+    private java.util.Map<String, Object> aiEvaluation = new java.util.HashMap<>();
+    
+    @Builder.Default
+    private java.util.List<String> requestedEvidence = new java.util.ArrayList<>();
     private String probeGoal;
 }

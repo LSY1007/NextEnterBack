@@ -30,6 +30,7 @@ public class TalentContact {
     @Column(columnDefinition = "TEXT")
     private String message; // 연락 메시지
 
+    @Builder.Default
     @Column(name = "status", length = 20)
     private String status = "PENDING"; // PENDING, ACCEPTED, REJECTED
 

@@ -21,5 +21,5 @@ public interface InterviewRepository extends JpaRepository<Interview, Long> {
     Optional<Interview> findByInterviewIdAndUserId(Long interviewId, Long userId);
 
     // 진행 중인 면접 조회
-    Optional<Interview> findByUserIdAndStatus(Long userId, Status status);
+    List<Interview> findByUserIdAndStatus(Long userId, Status status);
 }

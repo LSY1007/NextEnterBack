@@ -161,6 +161,7 @@ public class ResumeService {
      * 이력서 생성
      */
     @Transactional
+    @SuppressWarnings("deprecation")
     public ResumeResponse createResume(ResumeRequest request, Long userId) {
         log.info("이력서 생성 - userId: {}, title: {}", userId, request.getTitle());
 
@@ -224,6 +225,7 @@ public class ResumeService {
      * 이력서 수정
      */
     @Transactional
+    @SuppressWarnings("deprecation")
     public ResumeResponse updateResume(Long resumeId, ResumeRequest request, Long userId) {
         log.info("이력서 수정 - resumeId: {}, userId: {}", resumeId, userId);
 
@@ -549,6 +551,7 @@ public class ResumeService {
     /**
      * ResumeResponse 변환
      */
+    @SuppressWarnings("deprecation")
     private ResumeResponse convertToResponse(Resume resume) {
         // User 정보 조회
         User user = userRepository.findById(resume.getUserId()).orElse(null);

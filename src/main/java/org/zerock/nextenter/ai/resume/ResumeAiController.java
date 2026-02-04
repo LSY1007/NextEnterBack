@@ -31,9 +31,9 @@ public class ResumeAiController {
             log.info("✅ [Controller] 요청 처리 완료: recommendId={}", response.getRecommendId());
             return ResponseEntity.ok(response);
         } catch (org.springframework.web.client.RestClientResponseException e) {
-            log.error("❌ [Controller] AI 서버 응답 에러: Status={}, Body={}", e.getRawStatusCode(),
+            log.error("❌ [Controller] AI 서버 응답 에러: Status={}, Body={}", e.getStatusCode().value(),
                     e.getResponseBodyAsString());
-            return ResponseEntity.status(e.getRawStatusCode()).build(); // AI 서버의 에러 상태 코드 그대로 전달
+            return ResponseEntity.status(e.getStatusCode().value()).build(); // AI 서버의 에러 상태 코드 그대로 전달
         } catch (org.springframework.web.client.ResourceAccessException e) {
             log.error("❌ [Controller] AI 서버 연결 실패: {}", e.getMessage());
             throw new RuntimeException("AI 서버에 연결할 수 없습니다. (Connection Refused)");

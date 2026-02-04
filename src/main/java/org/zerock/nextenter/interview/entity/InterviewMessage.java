@@ -35,7 +35,7 @@ public class InterviewMessage {
     private LocalDateTime createdAt;
 
     public enum Role {
-        INTERVIEWER, CANDIDATE
+        INTERVIEWER, CANDIDATE, SYSTEM
     }
 
     @PrePersist

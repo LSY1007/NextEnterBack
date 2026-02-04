@@ -24,8 +24,7 @@ public class InterviewAnnotationService {
         log.info("Async Analysis Started: interviewId={}, turn={}", interviewId, turnNumber);
 
         try {
-            // Simulate Analysis Delay
-            Thread.sleep(100);
+            // Simulate Analysis Delay (Removed)
 
             // Rule-based Analysis (Prototype)
             double specificity = calculateSpecificity(answer);
@@ -49,8 +48,6 @@ public class InterviewAnnotationService {
             annotationRepository.save(annotation);
             log.info("Async Analysis Completed & Saved: annotationId={}", annotation.getAnnotationId());
 
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
         } catch (Exception e) {
             log.error("Analysis Failed", e);
         }

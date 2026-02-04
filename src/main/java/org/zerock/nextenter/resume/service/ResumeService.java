@@ -780,7 +780,7 @@ public class ResumeService {
     @Transactional
     public ResumeResponse updateResumeWithFiles(Long resumeId, ResumeRequest request, Long userId,
             List<MultipartFile> resumeFiles, List<MultipartFile> portfolioFiles, List<MultipartFile> coverLetterFiles) {
-        ResumeResponse resume = updateResume(resumeId, request, userId);
+        updateResume(resumeId, request, userId);
         Resume resumeEntity = resumeRepository.findById(resumeId)
                 .orElseThrow(() -> new IllegalArgumentException("이력서를 찾을 수 없습니다"));
 

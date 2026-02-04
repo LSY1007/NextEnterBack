@@ -26,9 +26,14 @@ public class InterviewAnnotation {
     @Column(columnDefinition = "TEXT")
     private String analysisContent; // 분석 내용 (STAR 구조 준수 여부 등)
 
-    private Double specificityScore; // 구체성 점수 (0.0~1.0)
-    private Double starComplianceScore; // STAR 구조 준수 점수
-    private Double jobFitScore; // 직무 적합성 점수
+    @Builder.Default
+    private Double specificityScore = 0.0; // 구체성 점수 (0.0~1.0)
+    
+    @Builder.Default
+    private Double starComplianceScore = 0.0; // STAR 구조 준수 점수
+    
+    @Builder.Default
+    private Double jobFitScore = 0.0; // 직무 적합성 점수
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

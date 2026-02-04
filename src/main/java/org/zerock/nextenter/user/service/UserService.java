@@ -28,7 +28,6 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final JWTUtil jwtUtil;
     private final VerificationCodeService verificationCodeService;
     private final EmailService emailService;
 

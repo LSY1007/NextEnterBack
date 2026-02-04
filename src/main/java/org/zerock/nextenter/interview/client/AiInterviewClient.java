@@ -105,12 +105,18 @@ public class AiInterviewClient {
     /**
      * 면접 종료 및 최종 점수 요청
      */
-    public AiFinalizeResponse finalizeInterview(String sessionId) {
-        log.info("🏁 [AI-FINALIZE] Requesting final score for session: {}", sessionId);
+    /**
+     * 면접 종료 및 최종 점수 요청
+     */
+    public AiFinalizeResponse finalizeInterview(String sessionId, List<Map<String, Object>> chatHistory) {
+        log.info("🏁 [AI-FINALIZE] Requesting final score for session: {}, History size: {}", sessionId, chatHistory != null ? chatHistory.size() : 0);
 
         try {
             // 1. Prepare Request Body
-            Map<String, String> requestBody = Map.of("id", sessionId);
+            Map<String, Object> requestBody = Map.of(
+                "id", sessionId,
+                "chat_history", chatHistory != null ? chatHistory : List.of()
+            );
             String jsonBody = objectMapper.writeValueAsString(requestBody);
 
             // 2. Configure Headers
@@ -124,7 +130,7 @@ public class AiInterviewClient {
             HttpEntity<String> requestEntity = new HttpEntity<>(jsonBody, headers);
 
             // 3. Send Request
-            String url = aiServerUrl + "/interview/finalize";
+            String url = aiServerUrl + "/api/v1/interview/finalize";
             log.info("🚀 [AI-FINALIZE] POST Request to: {}", url);
 
             ResponseEntity<String> responseEntity = directRestTemplate.postForEntity(url, requestEntity, String.class);
@@ -188,10 +194,18 @@ public class AiInterviewClient {
         private Map<String, Object> portfolio;
 
         @JsonProperty("portfolio_files")
-        private List<String> portfolioFiles;
+        @Builder.Default
+        private List<String> portfolioFiles = new java.util.ArrayList<>();
 
         @JsonProperty("total_turns")
         private Integer totalTurns; // ✅ 횟수 정보 추가
+
+        // [NEW] Stateless Context Support
+        @JsonProperty("chat_history")
+        private List<Map<String, Object>> chatHistory;
+
+        @JsonProperty("difficulty")
+        private String difficulty;
     }
 
     @Data
@@ -225,6 +239,9 @@ public class AiInterviewClient {
         private List<String> requestedEvidence;
 
         private Map<String, Object> report;
+
+        @JsonProperty("analysis_result")
+        private Map<String, Object> analysisResult; // ✅ [NEW] Analysis Data from Python
     }
 
     @Data

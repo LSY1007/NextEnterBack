@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
+
 
 /**
  * 이력서 파일(PDF 등)에서 텍스트를 추출합니다.

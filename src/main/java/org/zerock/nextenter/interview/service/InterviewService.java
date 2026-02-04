@@ -188,7 +188,6 @@ public class InterviewService {
         Resume resume = resumeRepository.findById(interview.getResumeId())
                 .orElseThrow(() -> new IllegalStateException("이력서 정보를 찾을 수 없습니다."));
 
-        // 3. 사용자 답변 저장
         InterviewMessage answerMessage = InterviewMessage.builder()
                 .interviewId(interview.getInterviewId())
                 .turnNumber(interview.getCurrentTurn())
@@ -196,6 +195,9 @@ public class InterviewService {
                 .message(request.getAnswer())
                 .build();
         interviewMessageRepository.save(answerMessage);
+        
+        // [DEBUG] Log saved answer
+        System.out.println("💾 [Service] Saved Answer Message. Turn: " + interview.getCurrentTurn() + ", Content: " + request.getAnswer());
 
         // 4. AI에게 답변 전송
         Map<String, Object> resumeContent = buildResumeContent(resume);
@@ -213,8 +215,12 @@ public class InterviewService {
         List<Map<String, Object>> chatHistory = fullHistory.stream().collect(Collectors.toList());
         if (!chatHistory.isEmpty()) {
              Map<String, Object> last = chatHistory.get(chatHistory.size() - 1);
+             // [DEBUG] Log last history item
+             System.out.println("🔍 [Service] Last history item role: " + last.get("role") + ", Content: " + last.get("content"));
+             
              if ("user".equals(last.get("role"))) {
                  chatHistory.remove(chatHistory.size() - 1);
+                 System.out.println("✂️ [Service] Removed last user message from history to avoid duplication with 'lastAnswer'");
              }
         }
 

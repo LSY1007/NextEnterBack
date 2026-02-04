@@ -74,11 +74,11 @@ public class AiRecommendRequest {
             result.put("file_path", this.filePath);
         }
 
-        // 이력서 데이터 (String List로 변환)
+        // 이력서 데이터 (String List로 변환 - 텍스트 요약용)
         List<String> cleanSkills = extractTextList(this.skills);
-        List<String> cleanEducations = extractTextList(this.educations);
-        List<String> cleanCareers = extractTextList(this.careers);
-        List<String> cleanProjects = extractTextList(this.projects);
+        List<String> cleanEducationsText = extractTextList(this.educations);
+        List<String> cleanCareersText = extractTextList(this.careers);
+        List<String> cleanProjectsText = extractTextList(this.projects);
 
         // 1. [raw_text 통합] AI가 이를 전체 텍스트로 인식
         StringBuilder fullTextBuilder = new StringBuilder();
@@ -94,9 +94,9 @@ public class AiRecommendRequest {
             fullTextBuilder.append("\n\n[총 경력] ").append(years).append("년").append(months).append("개월");
         }
 
-        appendSection(fullTextBuilder, "[경력]", cleanCareers);
-        appendSection(fullTextBuilder, "[프로젝트 및 경험]", cleanProjects);
-        appendSection(fullTextBuilder, "[학력 사항]", cleanEducations);
+        appendSection(fullTextBuilder, "[경력]", cleanCareersText);
+        appendSection(fullTextBuilder, "[프로젝트 및 경험]", cleanProjectsText);
+        appendSection(fullTextBuilder, "[학력 사항]", cleanEducationsText);
 
         if (!cleanSkills.isEmpty()) {
             fullTextBuilder.append("\n\n[보유 기술]\n").append(String.join(", ", cleanSkills));
@@ -112,16 +112,8 @@ public class AiRecommendRequest {
         skillsDict.put("additional", new ArrayList<>());
         contentMap.put("skills", skillsDict);
 
-        // (1) 학력 구조화
-        List<Map<String, String>> pythonEdu = new ArrayList<>();
-        for (String edu : cleanEducations) {
-            Map<String, String> map = new HashMap<>();
-            map.put("school_name", edu);
-            map.put("major", edu); // 이력이 major에 없다면 임의로 값을 넣어줌
-            map.put("degree", "학사"); // 기본값 설정 (null보단 나음)
-            map.put("status", "졸업");
-            pythonEdu.add(map);
-        }
+        // (1) 학력 구조화 (개선됨)
+        List<Map<String, String>> pythonEdu = extractEducationList(this.educations);
         contentMap.put("education", pythonEdu);
 
         // (2) 경력 구조화
@@ -130,15 +122,10 @@ public class AiRecommendRequest {
         List<Map<String, Object>> pythonCareer = extractCareerList(this.careers, roundedTotalYears);
         contentMap.put("professional_experience", pythonCareer);
 
-        // (3) 프로젝트 구조화
-        List<Map<String, String>> pythonProject = new ArrayList<>();
-        for (String p : cleanProjects) {
-            Map<String, String> map = new HashMap<>();
-            map.put("project_title", p);
-            map.put("description", p);
-            pythonProject.add(map);
-        }
+        // (3) 프로젝트 구조화 (개선됨)
+        List<Map<String, String>> pythonProject = extractProjectList(this.projects);
         contentMap.put("project_experience", pythonProject);
+        
         result.put("resume_content", contentMap);
 
         return result;
@@ -166,7 +153,7 @@ public class AiRecommendRequest {
         return input.toString();
     }
 
-    // 유틸 [Object -> List<String>] 만능 리스트 추출 함수
+    // 유틸 [Object -> List<String>] 만능 리스트 추출 함수 (텍스트 요약용)
     private List<String> extractTextList(Object input) {
         List<String> result = new ArrayList<>();
         if (input == null)
@@ -236,21 +223,133 @@ public class AiRecommendRequest {
     private String convertJobCategoryToRole(String category) {
         if (category == null)
             return "Backend Developer";
+
         String lower = category.toLowerCase().trim();
-        if (lower.contains("ui") || lower.contains("ux") || lower.contains("design"))
+
+        // 1. AI/LLM Engineer
+        if (lower.contains("ai") || lower.contains("llm") || lower.contains("data") || 
+            lower.contains("ml") || lower.contains("deep") || lower.contains("인공지능")) {
+            return "AI/LLM Engineer";
+        }
+
+        // 2. PM (Product Manager)
+        if (lower.contains("pm") || lower.contains("product") || lower.contains("기획") || 
+            lower.contains("manager") || lower.contains("po")) {
+            return "PM (Product Manager)";
+        }
+
+        // 3. UI/UX Designer
+        if (lower.contains("ui") || lower.contains("ux") || lower.contains("design") || lower.contains("디자인")) {
             return "UI/UX Designer";
-        if (lower.contains("pm") || lower.contains("기획"))
-            return "Product Manager";
-        if (lower.contains("front") || lower.contains("프론트"))
-            return "Frontend Developer";
-        if (lower.contains("full") || lower.contains("풀스택"))
+        }
+
+        // 4. Fullstack Developer
+        if (lower.contains("full") || lower.contains("풀스택")) {
             return "Fullstack Developer";
+        }
+
+        // 5. Frontend Developer
+        if (lower.contains("front") || lower.contains("프론트") || lower.contains("web") || lower.contains("웹")) {
+            return "Frontend Developer";
+        }
+
+        // 6. Backend Developer (Default)
         return "Backend Developer";
     }
 
     // ---------------------------------------------------------
-    // 경력 정보 구조화 메서드
+    // 구조화된 데이터 추출 메서드 (Map 유지)
     // ---------------------------------------------------------
+
+    /**
+     * 학력 정보를 구조화된 Map 리스트로 추출
+     */
+    private List<Map<String, String>> extractEducationList(Object educations) {
+        List<Map<String, String>> result = new ArrayList<>();
+        if (educations == null) return result;
+
+        List<Object> eduItems = new ArrayList<>();
+        if (educations instanceof Iterable) {
+            for (Object item : (Iterable<?>) educations) {
+                eduItems.add(item);
+            }
+        } else {
+            eduItems.add(educations);
+        }
+
+        for (Object item : eduItems) {
+            Map<String, String> map = new HashMap<>();
+            
+            if (item instanceof Map) {
+                Map<?, ?> srcMap = (Map<?, ?>) item;
+                
+                String school = extractField(srcMap, "school", "schoolName", "school_name", "학교명");
+                String major = extractField(srcMap, "major", "majorName", "department", "전공");
+                String degree = extractField(srcMap, "degree", "degreeType", "학위");
+                String status = extractField(srcMap, "status", "graduationStatus", "졸업여부");
+
+                if (school != null) {
+                    map.put("school_name", school);
+                    map.put("major", major != null ? major : school); // 전공 없으면 학교명이라도
+                    map.put("degree", degree != null ? degree : "학사");
+                    map.put("status", status != null ? status : "졸업");
+                    result.add(map);
+                }
+            } else if (item instanceof String) {
+                String s = ((String) item).trim();
+                if (!s.isEmpty()) {
+                    map.put("school_name", s);
+                    map.put("major", s);
+                    map.put("degree", "학사");
+                    map.put("status", "졸업");
+                    result.add(map);
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 프로젝트 정보를 구조화된 Map 리스트로 추출
+     */
+    private List<Map<String, String>> extractProjectList(Object projects) {
+        List<Map<String, String>> result = new ArrayList<>();
+        if (projects == null) return result;
+
+        List<Object> projItems = new ArrayList<>();
+        if (projects instanceof Iterable) {
+            for (Object item : (Iterable<?>) projects) {
+                projItems.add(item);
+            }
+        } else {
+            projItems.add(projects);
+        }
+
+        for (Object item : projItems) {
+            Map<String, String> map = new HashMap<>();
+            
+            if (item instanceof Map) {
+                Map<?, ?> srcMap = (Map<?, ?>) item;
+                
+                String title = extractField(srcMap, "title", "projectName", "project_title", "name", "프로젝트명");
+                String desc = extractField(srcMap, "description", "desc", "details", "내용");
+                
+                if (title != null) {
+                    map.put("project_title", title);
+                    map.put("description", desc != null ? desc : title);
+                    result.add(map);
+                }
+            } else if (item instanceof String) {
+                String s = ((String) item).trim();
+                if (!s.isEmpty()) {
+                    map.put("project_title", s);
+                    map.put("description", s);
+                    result.add(map);
+                }
+            }
+        }
+        return result;
+    }
 
     /**
      * 경력 정보를 구조화된 Map 리스트로 추출
@@ -288,11 +387,15 @@ public class AiRecommendRequest {
                 }
                 careerMap.put("company_name", companyName != null ? companyName : "Unknown");
 
-                // role 추출 (없으면 jobCategory 기반으로 생성)
-                String role = extractField(map, "role", "position", "직무", "position_name");
-                if (role == null || role.isEmpty()) {
+                // role 추출 (개선된 로직: 너무 긴 텍스트나 설명문은 제외)
+                String role = extractField(map, "role", "position", "직무", "position_name", "job_title");
+                
+                // 유효성 검사: role이 null이거나, 너무 길거나(50자 초과), 줄바꿈/특수문자가 포함된 경우 무효화
+                if (role == null || role.length() > 50 || role.contains("\n") || role.contains("Key Tasks") || role.contains("- ")) {
+                    // role이 유효하지 않으면 jobCategory 사용
                     role = convertJobCategoryToRole(this.jobCategory);
                 }
+                
                 careerMap.put("role", role);
 
                 // period 추출
@@ -341,20 +444,43 @@ public class AiRecommendRequest {
     }
 
     /**
-     * key_tasks를 List<String>으로 추출
-     * List, String(쉼표/줄바꿈 구분), 또는 단일 값 모두 처리
+     * key_tasks를 List<String>으로 추출 (강화된 버전)
      */
     private List<String> extractKeyTasks(Map<?, ?> map) {
         List<String> result = new ArrayList<>();
 
-        // 가능한 키 이름들
-        String[] keysToCheck = { "key_tasks", "tasks", "주요업무", "responsibilities", "담당업무", "description", "desc" };
-
+        // 1. 명시적인 키 확인 (우선순위 높음)
+        String[] explicitKeys = { "key_tasks", "tasks", "주요업무", "responsibilities", "담당업무" };
         Object tasksValue = null;
-        for (String key : keysToCheck) {
+        for (String key : explicitKeys) {
             tasksValue = map.get(key);
-            if (tasksValue != null) {
-                break;
+            if (tasksValue != null) break;
+        }
+
+        // 2. 명시적 키가 없으면, 설명(description) 필드에서 추출 시도
+        if (tasksValue == null) {
+             String[] descKeys = { "description", "desc", "details", "내용", "role" }; // role에 잘못 들어간 내용도 구출 시도
+             for (String key : descKeys) {
+                 Object val = map.get(key);
+                 // 텍스트가 길고(50자 이상) '다'나 '함'으로 끝나지 않거나, '-'가 있으면 업무 내용일 확률 높음
+                 if (val != null && val.toString().length() > 30) {
+                     tasksValue = val;
+                     break;
+                 }
+             }
+        }
+
+        // 3. (필살기) 키 이름 상관없이 Map의 모든 값을 뒤져서 긴 텍스트 찾기
+        if (tasksValue == null) {
+            for (Object val : map.values()) {
+                if (val != null) {
+                    String s = val.toString().trim();
+                    // 30자 이상이고, 날짜나 회사명 형식이 아닌 것
+                    if (s.length() > 30 && !s.matches(".*\\d{4}.*") && !s.equals(map.get("company_name"))) {
+                        tasksValue = s;
+                        break;
+                    }
+                }
             }
         }
 
@@ -362,7 +488,7 @@ public class AiRecommendRequest {
             return result;
         }
 
-        // List인 경우
+        // List인 경우 그대로 추가
         if (tasksValue instanceof Iterable) {
             for (Object task : (Iterable<?>) tasksValue) {
                 if (task != null) {
@@ -373,21 +499,25 @@ public class AiRecommendRequest {
                 }
             }
         }
-        // String인 경우 - 쉼표, 줄바꿈, 또는 세미콜론으로 분리
+        // String인 경우 - 스마트 분리 (줄바꿈, 마침표, 글머리 기호)
         else if (tasksValue instanceof String) {
             String tasksStr = ((String) tasksValue).trim();
             if (!tasksStr.isEmpty()) {
-                // 여러 구분자로 분리 시도
-                String[] parts = tasksStr.split("[,\n;]");
-                for (String part : parts) {
-                    String trimmed = part.trim();
-                    if (!trimmed.isEmpty()) {
-                        result.add(trimmed);
-                    }
+                // (1) " - " 또는 " -" 패턴으로 시작하는 경우 분리
+                if (tasksStr.contains("- ") || tasksStr.contains("\n") || tasksStr.contains("•")) {
+                     String[] parts = tasksStr.split("(?=\\s*[-•]\\s)|(?<=[.?!]\\s)|[\n]");
+                     for (String part : parts) {
+                         String clean = part.replaceAll("^\\s*[-•]\\s*", "").trim();
+                         if (!clean.isEmpty() && clean.length() > 2) { // 너무 짧은 잡음 제거
+                             result.add(clean);
+                         }
+                     }
+                } else {
+                    // (2) 구분자가 딱히 없으면 통으로 넣되, 너무 길면 마침표로 끊기 시도
+                    result.add(tasksStr);
                 }
             }
         }
-        // 기타 타입인 경우 toString() 사용
         else {
             String taskStr = tasksValue.toString().trim();
             if (!taskStr.isEmpty()) {

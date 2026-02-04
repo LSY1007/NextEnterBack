@@ -60,6 +60,10 @@ public class AiRecommendRequest {
     // [New] 파일 경로 (PDF/DOCX)
     private String filePath;
 
+    /** AI 서버 연동: Java에서 계산한 등급/분류 (AI가 우선 사용) */
+    private Map<String, Object> classification;
+    private Map<String, Object> evaluation;
+
     // ---------------------------------------------------------
     // AI 이력서 변환 로직
     // ---------------------------------------------------------
@@ -127,6 +131,10 @@ public class AiRecommendRequest {
         contentMap.put("project_experience", pythonProject);
         
         result.put("resume_content", contentMap);
+
+        // AI 서버 연동: classification / evaluation 전달 (있으면 AI가 등급·분류에 활용)
+        result.put("classification", this.classification != null ? this.classification : new HashMap<>());
+        result.put("evaluation", this.evaluation != null ? this.evaluation : new HashMap<>());
 
         return result;
     }

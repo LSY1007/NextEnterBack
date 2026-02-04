@@ -18,18 +18,15 @@ import java.util.List;
 public class InterviewController {
 
     private final InterviewService interviewService;
+    private final org.zerock.nextenter.user.repository.UserRepository userRepository;
 
     @Operation(summary = "면접 시작", description = "새로운 모의면접 세션을 시작합니다")
     @PostMapping("/start")
     public ResponseEntity<InterviewQuestionResponse> startInterview(
-            @RequestParam(required = false) Long userId, // 임시: RequestParam으로 변경
+            java.security.Principal principal,
             @Valid @RequestBody InterviewStartRequest request) {
 
-        // 테스트용: userId가 없으면 1로 설정
-        if (userId == null) {
-            userId = 1L;
-        }
-
+        Long userId = getUserIdFromPrincipal(principal);
         InterviewQuestionResponse response = interviewService.startInterview(userId, request);
         return ResponseEntity.ok(response);
     }
@@ -37,13 +34,10 @@ public class InterviewController {
     @Operation(summary = "답변 제출", description = "면접 질문에 대한 답변을 제출하고 다음 질문을 받습니다")
     @PostMapping("/answer")
     public ResponseEntity<InterviewQuestionResponse> submitAnswer(
-            @RequestParam(required = false) Long userId, // 임시: RequestParam으로 변경
+            java.security.Principal principal,
             @Valid @RequestBody InterviewMessageRequest request) {
 
-        if (userId == null) {
-            userId = 1L;
-        }
-
+        Long userId = getUserIdFromPrincipal(principal);
         InterviewQuestionResponse response = interviewService.submitAnswer(userId, request);
         return ResponseEntity.ok(response);
     }
@@ -51,13 +45,10 @@ public class InterviewController {
     @Operation(summary = "면접 결과 조회", description = "완료된 면접의 전체 결과를 조회합니다")
     @GetMapping("/{interviewId}")
     public ResponseEntity<InterviewResultDTO> getInterviewResult(
-            @RequestParam(required = false) Long userId, // 임시: RequestParam으로 변경
+            java.security.Principal principal,
             @PathVariable Long interviewId) {
 
-        if (userId == null) {
-            userId = 1L;
-        }
-
+        Long userId = getUserIdFromPrincipal(principal);
         InterviewResultDTO result = interviewService.getInterviewResult(userId, interviewId);
         return ResponseEntity.ok(result);
     }
@@ -65,12 +56,9 @@ public class InterviewController {
     @Operation(summary = "면접 히스토리 조회", description = "사용자의 모든 면접 히스토리를 조회합니다")
     @GetMapping("/history")
     public ResponseEntity<List<InterviewHistoryDTO>> getInterviewHistory(
-            @RequestParam(required = false) Long userId) { // 임시: RequestParam으로 변경
+            java.security.Principal principal) {
 
-        if (userId == null) {
-            userId = 1L;
-        }
-
+        Long userId = getUserIdFromPrincipal(principal);
         List<InterviewHistoryDTO> history = interviewService.getInterviewHistory(userId);
         return ResponseEntity.ok(history);
     }
@@ -78,14 +66,21 @@ public class InterviewController {
     @Operation(summary = "면접 취소", description = "진행 중인 면접을 취소합니다")
     @DeleteMapping("/{interviewId}")
     public ResponseEntity<Void> cancelInterview(
-            @RequestParam(required = false) Long userId, // 임시: RequestParam으로 변경
+            java.security.Principal principal,
             @PathVariable Long interviewId) {
 
-        if (userId == null) {
-            userId = 1L;
-        }
-
+        Long userId = getUserIdFromPrincipal(principal);
         interviewService.cancelInterview(userId, interviewId);
         return ResponseEntity.ok().build();
+    }
+
+    private Long getUserIdFromPrincipal(java.security.Principal principal) {
+        if (principal == null) {
+            throw new RuntimeException("Unauthorized user");
+        }
+        String email = principal.getName();
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."))
+                .getUserId();
     }
 }

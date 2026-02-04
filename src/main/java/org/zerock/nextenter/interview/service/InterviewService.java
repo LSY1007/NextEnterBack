@@ -549,7 +549,13 @@ public class InterviewService {
                 String normalizedJobCategory = org.zerock.nextenter.common.constants.JobConstants
                                 .normalize(resume.getJobCategory());
                 content.put("job_category", normalizedJobCategory);
+                content.put("raw_job_category", resume.getJobCategory()); // 직무 연관성 분석용 원본
                 log.info("🔍 [AI-DATA] job_category: {} (원본: {})", normalizedJobCategory, resume.getJobCategory());
+
+                // 경력 기간 (총 년수) 계산 및 주입
+                int totalYears = calculateTotalExperience(resume.getCareers());
+                content.put("total_experience_years", totalYears);
+                log.info("🔍 [AI-DATA] total_experience_years: {}년", totalYears);
 
                 Object education = parseJsonSafe(resume.getEducations());
                 content.put("education", education);
@@ -597,6 +603,49 @@ public class InterviewService {
                         log.warn("Failed to parse resume JSON field: {} (Value: {})", e.getMessage(), json);
                         return Collections.emptyList();
                 }
+        }
+
+        private int calculateTotalExperience(String careersJson) {
+            if (careersJson == null || careersJson.isEmpty())
+                return 0;
+            try {
+                com.fasterxml.jackson.databind.JsonNode careersArray = objectMapper.readTree(careersJson);
+                if (careersArray.isArray() && careersArray.size() > 0) {
+                    int totalMonths = 0;
+                    for (com.fasterxml.jackson.databind.JsonNode career : careersArray) {
+                        if (career.has("period")) {
+                            String period = career.get("period").asText();
+                            totalMonths += parsePeriodToMonths(period);
+                        }
+                    }
+                    return totalMonths / 12;
+                }
+            } catch (Exception e) {
+                log.warn("경력 JSON 파싱 실패: {}", e.getMessage());
+            }
+            return 0;
+        }
+
+        private int parsePeriodToMonths(String period) {
+            try {
+                String[] parts = period.split("~");
+                if (parts.length != 2)
+                    return 0;
+                String start = parts[0].trim().replace(" ", "");
+                String end = parts[1].trim().replace(" ", "");
+                String[] startParts = start.split("\\.");
+                String[] endParts = end.split("\\.");
+                if (startParts.length >= 2 && endParts.length >= 2) {
+                    int startYear = Integer.parseInt(startParts[0]);
+                    int startMonth = Integer.parseInt(startParts[1]);
+                    int endYear = Integer.parseInt(endParts[0]);
+                    int endMonth = Integer.parseInt(endParts[1]);
+                    return (endYear - startYear) * 12 + (endMonth - startMonth);
+                }
+            } catch (Exception e) {
+                log.warn("기간 파싱 실패: {}", period);
+            }
+            return 0;
         }
 
         private List<String> parseSkills(String skills) {

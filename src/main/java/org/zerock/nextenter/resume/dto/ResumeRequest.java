@@ -27,6 +27,7 @@ public class ResumeRequest {
     private String resumeAddress; // 주소
     private String resumeDetailAddress; // 상세주소
     private String profileImage; // 프로필 이미지 (Base64)
+    private String desiredSalary; // 희망 연봉
 
     // ===== 분리된 섹션들 (JSON 문자열로 전달) =====
 

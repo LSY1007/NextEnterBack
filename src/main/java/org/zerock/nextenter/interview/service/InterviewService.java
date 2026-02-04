@@ -94,6 +94,7 @@ public class InterviewService {
                                 .resumeId(request.getResumeId())
                                 .jobCategory(normalizedJobCategory) // Normalized
                                 .difficulty(difficulty)
+<<<<<<< Updated upstream
                                 .totalTurns(requestTotalTurns)
                                 .totalTurns(request.getTotalTurns() != null ? request.getTotalTurns() : 7) // [FIX] 기본값 7 (6질문 + 1종료)
                                 .currentTurn(0)
@@ -605,6 +606,7 @@ public class InterviewService {
                         return Collections.emptyList();
                 }
         }
+
         private List<String> parseSkills(String skills) {
             if (skills == null || skills.isBlank()) {
                 return Collections.emptyList();

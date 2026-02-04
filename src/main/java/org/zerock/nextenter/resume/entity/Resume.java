@@ -56,6 +56,9 @@ public class Resume {
     
     @Column(name = "profile_image", columnDefinition = "LONGTEXT")
     private String profileImage; // 프로필 이미지 (Base64)
+    
+    @Column(name = "desired_salary", length = 50)
+    private String desiredSalary; // 희망 연봉
 
     // ===== 분리된 섹션 컬럼들 (JSON 타입) =====
 

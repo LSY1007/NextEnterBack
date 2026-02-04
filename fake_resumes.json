@@ -1,0 +1,150 @@
+[
+  {
+    "resume_id": 1,
+    "grade": "Entry",
+    "resume_name": "김신입",
+    "title": "열정 가득한 신입 풀스택 개발자 김신입입니다.",
+    "job_category": "Fullstack",
+    "skills": [
+      "JavaScript",
+      "HTML/CSS",
+      "React",
+      "Node.js",
+      "Express",
+      "MongoDB",
+      "Git"
+    ],
+    "experiences": [
+      {
+        "title": "팀 프로젝트: 동네 중고거래 마켓 '우리동네'",
+        "period": "2023.09 ~ 2023.12",
+        "description": "부트캠프 파이널 프로젝트로 MERN 스택을 활용한 위치 기반 중고거래 서비스 개발. Redux Toolkit을 이용한 전역 상태 관리 및 Socket.io 기반 실시간 채팅 기능 구현. AWS EC2 배포 및 인프라 구축 경험."
+      },
+      {
+        "title": "개인 블로그 'MyTechLog' 개발",
+        "period": "2023.07 ~ 2023.08",
+        "description": "Next.js와 TypeScript를 학습하며 만든 정적 블로그 사이트. markdown 파싱 기능을 직접 구현하고 SEO 최적화를 통해 검색 노출 개선. Vercel을 통한 CI/CD 자동화 구축."
+      }
+    ],
+    "status": "COMPLETED"
+  },
+  {
+    "resume_id": 2,
+    "grade": "Junior",
+    "resume_name": "이자바",
+    "title": "기본기가 탄탄한 2년차 풀스택 엔지니어",
+    "job_category": "Fullstack",
+    "skills": [
+      "Java",
+      "Spring Boot",
+      "JPA",
+      "React",
+      "TypeScript",
+      "MySQL",
+      "AWS",
+      "Docker"
+    ],
+    "experiences": [
+      {
+        "title": "사내 어드민 대시보드 리뉴얼",
+        "period": "2022.03 ~ 현재",
+        "description": "레거시 PHP 기반 어드민을 Spring Boot + React로 마이그레이션. 복잡한 통계 쿼리를 QueryDSL로 최적화하여 조회 속도 3배 개선. 컴포넌트 기반 설계를 도입하여 UI 개발 생산성 40% 향상."
+      },
+      {
+        "title": "B2B 쇼핑몰 주문 연동 API 개발",
+        "period": "2021.05 ~ 2022.02",
+        "description": "외부 파트너사와의 주문 연동을 위한 RESTful API 설계 및 개발. 대용량 주문 처리를 위한 뱃치 프로세스 구현. JUnit을 활용한 단위 테스트 커버리지 70% 달성."
+      }
+    ],
+    "status": "COMPLETED"
+  },
+  {
+    "resume_id": 3,
+    "grade": "Middle",
+    "resume_name": "박서버",
+    "title": "비즈니스 가치를 창출하는 5년차 풀스택 개발자",
+    "job_category": "Fullstack",
+    "skills": [
+      "Kotlin",
+      "Spring Boot",
+      "Vue.js",
+      "Redis",
+      "Kafka",
+      "PostgreSQL",
+      "Kubernetes",
+      "MSA"
+    ],
+    "experiences": [
+      {
+        "title": "글로벌 커머스 플랫폼 MSA 전환",
+        "period": "2021.01 ~ 현재",
+        "description": "Monolithic 아키텍처를 도메인별 Microservices로 분리. Spring Cloud Gateway 및 Eureka 적용. 이벤트 기반 아키텍처(EDA) 도입으로 서비스 간 결합도 낮춤. 트래픽 피크 시 Auto-scaling 정책 수립."
+      },
+      {
+        "title": "사내 디자인 시스템 구축 리딩",
+        "period": "2019.04 ~ 2020.12",
+        "description": "Vue.js 기반의 공용 UI 라이브러리 개발 및 배포. Storybook을 활용한 문서화 및 사내 개발자 교육 진행. 일관된 UX 제공 및 프론트엔드 개발 시간 50% 단축에 기여."
+      }
+    ],
+    "status": "COMPLETED"
+  },
+  {
+    "resume_id": 4,
+    "grade": "Senior",
+    "resume_name": "최리더",
+    "title": "아키텍처 설계와 팀 리딩이 가능한 8년차 풀스택 개발자",
+    "job_category": "Fullstack",
+    "skills": [
+      "Go",
+      "gRPC",
+      "Next.js",
+      "GraphQL",
+      "Terraform",
+      "AWS",
+      "Elasticsearch",
+      "System Design"
+    ],
+    "experiences": [
+      {
+        "title": "핀테크 스타트업 초기 멤버 & 테크 리드",
+        "period": "2020.06 ~ 현재",
+        "description": "시리즈 A 투자 유치를 위한 MVP 개발부터 MAU 50만 서비스 확장까지 기술 총괄. Go 언어 기반의 고성능 트랜잭션 처리 시스템 구축. Next.js 기반의 SEO 최적화 및 웹 성능 튜닝(Core Web Vitals 올 그린)."
+      },
+      {
+        "title": "통합 검색 엔진 고도화",
+        "period": "2017.03 ~ 2020.05",
+        "description": "Elasticsearch 기반의 상품 검색 엔진 튜닝. 형태소 분석기 커스터마이징 및 검색 랭킹 알고리즘 개선으로 검색 품질 만족도 20% 상승. 대용량 로그 수집 및 분석 파이프라인(ELK Stack) 구축."
+      }
+    ],
+    "status": "COMPLETED"
+  },
+  {
+    "resume_id": 5,
+    "grade": "Principal",
+    "resume_name": "정수석",
+    "title": "기술적 난제를 해결하는 12년차 풀스택 아키텍트",
+    "job_category": "Fullstack",
+    "skills": [
+      "Java",
+      "Spring WebFlux",
+      "React Native",
+      "Rust",
+      "Cloud Native",
+      "DevOps",
+      "AI Engineering"
+    ],
+    "experiences": [
+      {
+        "title": "전사 클라우드 네이티브 전환 총괄",
+        "period": "2018.02 ~ 현재",
+        "description": "On-premise 환경에서 AWS Cloud로의 전면 이관 주도 (Lift & Shift -> Re-platforming). Kubernetes(EKS) 기반의 컨테이너 오케스트레이션 환경 표준화. IaC(Terraform) 도입으로 인프라 관리 효율화 및 비용 30% 절감."
+      },
+      {
+        "title": "AI 기반 개인화 추천 서비스 아키텍처 설계",
+        "period": "2014.11 ~ 2018.01",
+        "description": "머신러닝 모델 서빙을 위한 하이브리드 앱 아키텍처 설계. React Native를 활용한 원소스 멀티유즈 전략으로 안드로이드/iOS 동시 대응. 실시간 데이터 파이프라인 구축으로 추천 모델 학습 주기 단축."
+      }
+    ],
+    "status": "COMPLETED"
+  }
+]

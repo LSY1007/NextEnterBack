@@ -38,6 +38,9 @@ public class InterviewController {
             @Valid @RequestBody InterviewMessageRequest request) {
 
         Long userId = getUserIdFromPrincipal(principal);
+        // [DEBUG] Log the received answer
+        System.out.println("📝 [Controller] submitAnswer called. InterviewId: " + request.getInterviewId() + ", Answer: " + request.getAnswer());
+        
         InterviewQuestionResponse response = interviewService.submitAnswer(userId, request);
         return ResponseEntity.ok(response);
     }

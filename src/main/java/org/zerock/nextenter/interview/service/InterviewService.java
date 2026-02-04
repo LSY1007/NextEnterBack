@@ -78,7 +78,8 @@ public class InterviewService {
                                 .resumeId(request.getResumeId())
                                 .jobCategory(normalizedJobCategory) // Normalized
                                 .difficulty(difficulty)
-                                .totalTurns(request.getTotalTurns() != null ? request.getTotalTurns() : 5)
+                                .totalTurns(requestTotalTurns)
+                                .totalTurns(request.getTotalTurns() != null ? request.getTotalTurns() : 7) // [FIX] 기본값 7 (6질문 + 1종료)
                                 .currentTurn(0)
                                 .status(Status.IN_PROGRESS)
                                 .build();
@@ -449,7 +450,13 @@ public class InterviewService {
                 String normalizedJobCategory = org.zerock.nextenter.common.constants.JobConstants
                                 .normalize(resume.getJobCategory());
                 content.put("job_category", normalizedJobCategory);
+                content.put("raw_job_category", resume.getJobCategory()); // 직무 연관성 분석용 원본
                 log.info("🔍 [AI-DATA] job_category: {} (원본: {})", normalizedJobCategory, resume.getJobCategory());
+
+                // 경력 기간 (총 년수) 계산 및 주입
+                int totalYears = calculateTotalExperience(resume.getCareers());
+                content.put("total_experience_years", totalYears);
+                log.info("🔍 [AI-DATA] total_experience_years: {}년", totalYears);
 
                 Object education = parseJsonSafe(resume.getEducations());
                 content.put("education", education);
@@ -492,5 +499,101 @@ public class InterviewService {
                         log.warn("Failed to parse resume JSON field: {}", e.getMessage());
                         return Collections.emptyList();
                 }
+        }
+        private List<String> parseSkills(String skills) {
+            if (skills == null || skills.isBlank()) {
+                return Collections.emptyList();
+            }
+            // CSV parsing: Split by comma, trim, filter empty
+            return java.util.Arrays.stream(skills.split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+
+            List<InterviewMessage> messages = interviewMessageRepository.findByInterviewIdOrderByTurnNumberAsc(interviewId);
+        private List<Map<String, Object>> buildChatHistory(Long interviewId) {
+            return messages.stream()
+                .map(msg -> {
+                    if (msg.getRole() == Role.SYSTEM) {
+                    Map<String, Object> item = new HashMap<>();
+                        item.put("role", "system");
+                        item.put("type", "analysis");
+                            // Parse JSON string back to Map/Object for Python
+                        try {
+                            item.put("content", objectMapper.readValue(msg.getMessage(), new TypeReference<Map<String, Object>>() {}));
+                        } catch (Exception e) {
+                            log.error("Failed to parse SYSTEM message content: {}", msg.getMessage());
+                            item.put("content", msg.getMessage()); // Fallback
+                        }
+                    } else {
+                        // Role Mapping: INTERVIEWER -> assistant, CANDIDATE -> user
+                        String role = (msg.getRole() == Role.INTERVIEWER) ? "assistant" : "user";
+                        item.put("content", msg.getMessage()); // Standard string content
+                        item.put("role", role);
+                        // Type: question vs answer
+                        item.put("type", (msg.getRole() == Role.INTERVIEWER) ? "question" : "answer");
+                    }
+                    return item;
+                .collect(Collectors.toList());
+                })
+        /**
+         * 경력 기술서 JSON에서 총 경력 기간(개월 -> 년) 계산
+         */
+        private int calculateTotalExperience(String careersJson) {
+                if (careersJson == null || careersJson.isBlank()) {
+                        return 0;
+                }
+                try {
+                        List<Map<String, Object>> careers = objectMapper.readValue(careersJson, new TypeReference<List<Map<String, Object>>>() {});
+                        if (careers == null || careers.isEmpty()) {
+                                return 0;
+                        }
+                        
+                        for (Map<String, Object> career : careers) {
+                        int totalMonths = 0;
+                                        Object periodObj = career.get("period");
+                                if (career.containsKey("period")) {
+                                        if (periodObj != null) {
+                                                totalMonths += parsePeriodToMonths(periodObj.toString());
+                                        }
+                                }
+                        }
+                } catch (Exception e) {
+                        return totalMonths / 12;
+                        log.warn("경력 기간 계산 실패: {}", e.getMessage());
+                        return 0;
+                }
+        }
+
+        private int parsePeriodToMonths(String period) {
+                try {
+                        // 예상 포맷: "2020.03 ~ 2022.05"
+                        String[] parts = period.split("~");
+                        if (parts.length != 2)
+                                return 0;
+                        
+                        String end = parts[1].trim().replace(" ", "");
+                        String start = parts[0].trim().replace(" ", "");
+                        
+                        if (end.equals("재직중") || end.equalsIgnoreCase("Present")) {
+                        // "재직중" 처리
+                                java.time.LocalDate now = java.time.LocalDate.now();
+                                end = now.getYear() + "." + String.format("%02d", now.getMonthValue());
+                        }
+
+                        String[] startParts = start.split("\\.");
+                        String[] endParts = end.split("\\.");
+                        
+                        if (startParts.length >= 2 && endParts.length >= 2) {
+                                int startYear = Integer.parseInt(startParts[0]);
+                                int startMonth = Integer.parseInt(startParts[1]);
+                                int endYear = Integer.parseInt(endParts[0]);
+                                int endMonth = Integer.parseInt(endParts[1]);
+                                
+                                return Math.max(0, (endYear - startYear) * 12 + (endMonth - startMonth));
+                        }
+                } catch (Exception e) {
+                        // ignore parsing errors
+                }
+                return 0;
         }
 }

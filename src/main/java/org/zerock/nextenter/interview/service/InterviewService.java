@@ -607,6 +607,7 @@ public class InterviewService {
                 }
         }
 
+<<<<<<< Updated upstream
         private List<String> parseSkills(String skills) {
             if (skills == null || skills.isBlank()) {
                 return Collections.emptyList();

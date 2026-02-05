@@ -49,6 +49,7 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private OAuth2UserInfo extractUserInfo(String registrationId, Map<String, Object> attributes) {
         // ✅ 네이버
         if ("naver".equals(registrationId)) {

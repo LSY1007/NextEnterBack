@@ -35,7 +35,7 @@ INSERT IGNORE INTO company (company_id, email, password, name, phone, business_n
 (120, 'recruit@watcha.com', 'pass1234', '왓챠채용', '010-1111-2222', '123-45-00120', '왓챠', 'OTT/Recommendation', '서울특별시 강남구', '발견의 기쁨, 왓챠.', 250, true, NOW(), NOW());
 
 -- ==========================================
--- 2. Insert Job Postings (IDs 101-120) linked to Companies 101-120
+-- 2. Insert Job Postings
 -- ==========================================
 INSERT IGNORE INTO job_posting (job_id, company_id, title, job_category, required_skills, preferred_skills, experience_min, experience_max, salary_min, salary_max, location, location_city, description, status, view_count, applicant_count, bookmark_count, created_at, updated_at) VALUES
 (101, 101, 'AI/ML Engineer (Search & Recommendation)', 'AI', 'Python, PyTorch, TensorFlow', 'Kubernetes, ONNX, Triton Inference Server', 3, 10, 6000, 12000, '경기도 성남시 분당구 정자동', '성남시', 
@@ -98,31 +98,50 @@ INSERT IGNORE INTO job_posting (job_id, company_id, title, job_category, require
 (120, 120, 'Backend Developer (Recommendation)', 'Backend', 'Ruby on Rails, Go, AWS', 'Machine Learning, Redis, SQL', 3, 9, 5000, 9000, '서울특별시 강남구', '서울', 
 '<h2>주요 업무</h2><ul><li>개인화 추천 시스템 서빙을 위한 백엔드 API 개발</li><li>대용량 별점 데이터 처리 및 분석 파이프라인 운영</li></ul>', 'ACTIVE', 900, 28, 65, NOW(), NOW());
 
--- ==========================================
+
+-- ============================================================
 -- 3. Insert Resumes (IDs 101-105)
--- ==========================================
-INSERT IGNORE INTO resume (resume_id, user_id, resume_name, title, job_category, skills, experiences, status, created_at, updated_at) VALUES
-(101, 1, '김신입', '열정 가득한 신입 풀스택 개발자 김신입입니다.', 'Fullstack', 
-'["JavaScript", "HTML/CSS", "React", "Node.js", "Express", "MongoDB", "Git"]', 
-'[{"title": "팀 프로젝트: 동네 중고거래 마켓 우리동네", "period": "2023.09 ~ 2023.12", "description": "부트캠프 파이널 프로젝트. MERN 스택 활용."}, {"title": "개인 블로그 MyTechLog 개발", "period": "2023.07 ~ 2023.08", "description": "Next.js와 TypeScript 학습용 블로그."}]', 
-'COMPLETED', NOW(), NOW()),
+-- Updated with explicit Educations and Careers JSON data
+-- REPLACED INSERT IGNORE WITH REPLACE INTO
+-- ADDED is_main=true, view_count=0, visibility='PUBLIC'
+-- ============================================================
+REPLACE INTO resume (resume_id, user_id, is_main, view_count, visibility, resume_name, title, job_category, skills, educations, careers, certificates, experiences, status, created_at, updated_at) VALUES
+(101, 1, true, 0, 'PUBLIC', '김신입', '열정 가득한 신입 풀스택 개발자 김신입입니다.', 'Fullstack', 
+ '["JavaScript", "HTML/CSS", "React", "Node.js", "Express", "MongoDB", "Git"]',
+ '[{"school_name": "한국대학교", "major": "정보통신공학과", "admission_year": "2017", "graduation_year": "2023", "graduation_status": "GRADUATED"}]',
+ '[]',
+ '[]',
+ '[{"title": "동네 중고거래 마켓 우리동네", "period": "2023.09 ~ 2023.12", "description": "부트캠프 파이널 프로젝트. MERN 스택 활용."}, {"title": "개인 블로그 MyTechLog", "period": "2023.07 ~ 2023.08", "description": "Next.js 학습용 블로그."}]', 
+ 'COMPLETED', NOW(), NOW()),
 
-(102, 1, '이자바', '기본기가 탄탄한 2년차 풀스택 엔지니어', 'Fullstack', 
-'["Java", "Spring Boot", "JPA", "React", "TypeScript", "MySQL", "AWS", "Docker"]', 
-'[{"title": "사내 어드민 대시보드 리뉴얼", "period": "2022.03 ~ 현재", "description": "레거시 PHP를 Spring Boot + React로 마이그레이션."}, {"title": "B2B 쇼핑몰 주문 연동 API 개발", "period": "2021.05 ~ 2022.02", "description": "외부 파트너사 연동 RESTful API 개발."}]', 
-'COMPLETED', NOW(), NOW()),
+(102, 1, true, 0, 'PUBLIC', '이자바', '기본기가 탄탄한 2년차 풀스택 엔지니어', 'Fullstack', 
+ '["Java", "Spring Boot", "JPA", "React", "TypeScript", "MySQL", "AWS", "Docker"]', 
+ '[{"school_name": "서울대학교", "major": "컴퓨터공학과", "admission_year": "2015", "graduation_year": "2021", "graduation_status": "GRADUATED"}]',
+ '[{"company_name": "스타트업 A", "department": "개발팀", "position": "사원", "start_date": "2022-01", "end_date": "2023-12", "description": "사내 어드민 대시보드 리뉴얼 및 유지보수, Legacy PHP 마이그레이션", "tech_stack": "React, Spring Boot"}]',
+ '[]',
+ '[{"title": "사내 어드민 대시보드 리뉴얼", "period": "2022.03 ~ 현재", "description": "레거시 PHP를 Spring Boot + React로 마이그레이션."}, {"title": "B2B 쇼핑몰 주문 연동 API 개발", "period": "2021.05 ~ 2022.02", "description": "외부 파트너사 연동 RESTful API 개발."}]', 
+ 'COMPLETED', NOW(), NOW()),
 
-(103, 1, '박서버', '비즈니스 가치를 창출하는 5년차 풀스택 개발자', 'Fullstack', 
-'["Kotlin", "Spring Boot", "Vue.js", "Redis", "Kafka", "PostgreSQL", "Kubernetes", "MSA"]', 
-'[{"title": "글로벌 커머스 플랫폼 MSA 전환", "period": "2021.01 ~ 현재", "description": "Monolithic -> Microservices 전환."}, {"title": "사내 디자인 시스템 구축 리딩", "period": "2019.04 ~ 2020.12", "description": "Vue.js 기반 UI 라이브러리 개발."}]', 
-'COMPLETED', NOW(), NOW()),
+(103, 1, true, 0, 'PUBLIC', '박서버', '비즈니스 가치를 창출하는 5년차 풀스택 개발자', 'Fullstack', 
+ '["Kotlin", "Spring Boot", "Vue.js", "Redis", "Kafka", "PostgreSQL", "Kubernetes", "MSA"]', 
+ '[{"school_name": "연세대학교", "major": "컴퓨터공학과", "admission_year": "2012", "graduation_year": "2018", "graduation_status": "GRADUATED"}]',
+ '[{"company_name": "테크기업 B", "department": "플랫폼본부", "position": "대리", "start_date": "2019-01", "end_date": "현재", "description": "글로벌 커머스 플랫폼 MSA 전환 프로젝트 참여, 결제 도메인 담당", "tech_stack": "Kotlin, Spring Boot, Kafka"}]',
+ '[]',
+ '[{"title": "글로벌 커머스 플랫폼 MSA 전환", "period": "2021.01 ~ 현재", "description": "Monolithic -> Microservices 전환."}, {"title": "사내 디자인 시스템 구축 리딩", "period": "2019.04 ~ 2020.12", "description": "Vue.js 기반 UI 라이브러리 개발."}]', 
+ 'COMPLETED', NOW(), NOW()),
 
-(104, 1, '최리더', '아키텍처 설계와 팀 리딩이 가능한 8년차 풀스택 개발자', 'Fullstack', 
-'["Go", "gRPC", "Next.js", "GraphQL", "Terraform", "AWS", "Elasticsearch", "System Design"]', 
-'[{"title": "핀테크 스타트업 초기 멤버 & 테크 리드", "period": "2020.06 ~ 현재", "description": "시리즈 A 투자 유치 및 기술 총괄."}, {"title": "통합 검색 엔진 고도화", "period": "2017.03 ~ 2020.05", "description": "Elasticsearch 기반 상품 검색 엔진 튜닝."}]', 
-'COMPLETED', NOW(), NOW()),
+(104, 1, true, 0, 'PUBLIC', '최리더', '아키텍처 설계와 팀 리딩이 가능한 8년차 풀스택 개발자', 'Fullstack', 
+ '["Go", "gRPC", "Next.js", "GraphQL", "Terraform", "AWS", "Elasticsearch", "System Design"]', 
+ '[{"school_name": "고려대학교", "major": "컴퓨터공학과", "admission_year": "2009", "graduation_year": "2015", "graduation_status": "GRADUATED"}]',
+ '[{"company_name": "핀테크 C", "department": "Tech Lead", "position": "팀장", "start_date": "2016-01", "end_date": "현재", "description": "시리즈 B 투자 유치 기여, 전사 아키텍처 설계 및 기술 리딩", "tech_stack": "Go, AWS, Kubernetes"}]',
+ '[]',
+ '[{"title": "핀테크 스타트업 초기 멤버 & 테크 리드", "period": "2020.06 ~ 현재", "description": "시리즈 A 투자 유치 및 기술 총괄."}, {"title": "통합 검색 엔진 고도화", "period": "2017.03 ~ 2020.05", "description": "Elasticsearch 기반 상품 검색 엔진 튜닝."}]', 
+ 'COMPLETED', NOW(), NOW()),
 
-(105, 1, '정수석', '기술적 난제를 해결하는 12년차 풀스택 아키텍트', 'Fullstack', 
-'["Java", "Spring WebFlux", "React Native", "Rust", "Cloud Native", "DevOps", "AI Engineering"]', 
-'[{"title": "전사 클라우드 네이티브 전환 총괄", "period": "2018.02 ~ 현재", "description": "On-premise -> AWS Cloud 전환."}, {"title": "AI 기반 개인화 추천 서비스 아키텍처 설계", "period": "2014.11 ~ 2018.01", "description": "ML 모델 서빙을 위한 하이브리드 앱 아키텍처."}]', 
-'COMPLETED', NOW(), NOW());
+(105, 1, true, 0, 'PUBLIC', '정수석', '기술적 난제를 해결하는 12년차 풀스택 아키텍트', 'Fullstack', 
+ '["Java", "Spring WebFlux", "React Native", "Rust", "Cloud Native", "DevOps", "AI Engineering"]', 
+ '[{"school_name": "카이스트", "major": "컴퓨터공학과", "admission_year": "2005", "graduation_year": "2011", "graduation_status": "GRADUATED"}]',
+ '[{"company_name": "대기업 D", "department": "클라우드개발실", "position": "수석연구원", "start_date": "2012-01", "end_date": "현재", "description": "전사 클라우드 네이티브 전환 총괄, AI 모델 서빙 플랫폼 아키텍처 설계", "tech_stack": "Java, Kubernetes, AWS"}]',
+ '[]',
+ '[{"title": "전사 클라우드 네이티브 전환 총괄", "period": "2018.02 ~ 현재", "description": "On-premise -> AWS Cloud 전환."}, {"title": "AI 기반 개인화 추천 서비스 아키텍처 설계", "period": "2014.11 ~ 2018.01", "description": "ML 모델 서빙을 위한 하이브리드 앱 아키텍처."}]', 
+ 'COMPLETED', NOW(), NOW());

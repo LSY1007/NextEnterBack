@@ -27,6 +27,10 @@ public class JobPostingController {
 
     private final JobPostingService jobPostingService;
 
+    // ✅ 최대 페이지 크기 상수 추가
+    private static final int MAX_PAGE_SIZE = 100;
+    private static final int DEFAULT_PAGE_SIZE = 10;
+
     @Operation(summary = "공고 목록 조회")
     @GetMapping("/list")
     public ResponseEntity<Page<JobPostingListResponse>> getJobPostingList(
@@ -45,14 +49,24 @@ public class JobPostingController {
             @Parameter(description = "페이지 번호 (0부터 시작)", example = "0")
             @RequestParam(defaultValue = "0") int page,
 
-            @Parameter(description = "페이지 크기", example = "10")
+            @Parameter(description = "페이지 크기 (최대 100)", example = "10")
             @RequestParam(defaultValue = "10") int size
     ) {
-        log.info("GET /api/jobs/list - jobCategories: {}, regions: {}, keyword: {}, status: {}, page: {}", 
-                jobCategories, regions, keyword, status, page);
+        // ✅ size 검증 및 제한
+        int validatedSize = size;
+        if (size <= 0) {
+            log.warn("⚠️ Invalid size parameter: {}. Using default: {}", size, DEFAULT_PAGE_SIZE);
+            validatedSize = DEFAULT_PAGE_SIZE;
+        } else if (size > MAX_PAGE_SIZE) {
+            log.warn("⚠️ Size {} exceeds maximum {}. Limiting to maximum.", size, MAX_PAGE_SIZE);
+            validatedSize = MAX_PAGE_SIZE;
+        }
+
+        log.info("GET /api/jobs/list - jobCategories: {}, regions: {}, keyword: {}, status: {}, page: {}, size: {} (validated: {})",
+                jobCategories, regions, keyword, status, page, size, validatedSize);
 
         Page<JobPostingListResponse> jobs = jobPostingService
-                .getJobPostingList(jobCategories, regions, keyword, status, page, size);
+                .getJobPostingList(jobCategories, regions, keyword, status, page, validatedSize);
 
         return ResponseEntity.ok(jobs);
     }
@@ -141,7 +155,7 @@ public class JobPostingController {
             @Parameter(description = "상태 변경 요청", required = true)
             @RequestBody Map<String, String> request
     ) {
-        log.info("PATCH /api/jobs/{}/status - companyId: {}, status: {}", 
+        log.info("PATCH /api/jobs/{}/status - companyId: {}, status: {}",
                 id, companyId, request.get("status"));
 
         jobPostingService.updateJobPostingStatus(id, companyId, request.get("status"));

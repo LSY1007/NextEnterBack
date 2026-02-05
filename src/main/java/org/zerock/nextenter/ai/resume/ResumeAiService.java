@@ -52,6 +52,36 @@ public class ResumeAiService {
 
             // 4. JSON 문자열로 직접 변환 (Pretty Print로 가독성 향상)
             String jsonPayload = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(aiRequestMap);
+
+            // [DEBUG] 각 섹션별 데이터 상태 로그
+            @SuppressWarnings("unchecked")
+            Map<String, Object> debugContent = (Map<String, Object>) aiRequestMap.get("resume_content");
+            if (debugContent != null) {
+                log.info("📊 [AI 전송 데이터 상세]");
+                log.info("  - target_role: {}", aiRequestMap.get("target_role"));
+
+                // 학력
+                Object edu = debugContent.get("education");
+                log.info("  - education: {} 건", (edu instanceof java.util.List) ? ((java.util.List<?>) edu).size() : "0");
+
+                // 경력
+                Object career = debugContent.get("professional_experience");
+                log.info("  - professional_experience: {} 건", (career instanceof java.util.List) ? ((java.util.List<?>) career).size() : "0");
+
+                // 프로젝트
+                Object proj = debugContent.get("project_experience");
+                log.info("  - project_experience: {} 건", (proj instanceof java.util.List) ? ((java.util.List<?>) proj).size() : "0");
+
+                // 스킬
+                Object skills = debugContent.get("skills");
+                if (skills instanceof Map) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> skillsMap = (Map<String, Object>) skills;
+                    Object essential = skillsMap.get("essential");
+                    log.info("  - skills (essential): {} 건", (essential instanceof java.util.List) ? ((java.util.List<?>) essential).size() : "0");
+                }
+            }
+
             log.info("📦 [AI 전송 데이터 (Pretty)]:\n{}", jsonPayload);
 
             // raw_text 길이 확인 (디버깅용)

@@ -162,10 +162,26 @@ public class AiRecommendRequest {
     }
 
     // 유틸 [Object -> List<String>] 만능 리스트 추출 함수 (텍스트 요약용)
+    // [FIX] 콤마로 구분된 문자열도 처리
     private List<String> extractTextList(Object input) {
         List<String> result = new ArrayList<>();
         if (input == null)
             return result;
+
+        // [FIX] 콤마로 구분된 단순 문자열 처리 (예: "java, python, react")
+        if (input instanceof String) {
+            String str = ((String) input).trim();
+            if (!str.isEmpty() && !str.startsWith("[") && str.contains(",")) {
+                // JSON 배열이 아닌 콤마 구분 문자열
+                for (String part : str.split(",")) {
+                    String trimmed = part.trim();
+                    if (!trimmed.isEmpty()) {
+                        result.add(trimmed);
+                    }
+                }
+                return result;
+            }
+        }
 
         if (input instanceof Iterable) {
             for (Object item : (Iterable<?>) input) {
@@ -271,6 +287,7 @@ public class AiRecommendRequest {
 
     /**
      * 학력 정보를 구조화된 Map 리스트로 추출
+     * [FIX] 더 다양한 키 이름 지원 및 디버그 로깅
      */
     private List<Map<String, String>> extractEducationList(Object educations) {
         List<Map<String, String>> result = new ArrayList<>();
@@ -287,21 +304,36 @@ public class AiRecommendRequest {
 
         for (Object item : eduItems) {
             Map<String, String> map = new HashMap<>();
-            
+
             if (item instanceof Map) {
                 Map<?, ?> srcMap = (Map<?, ?>) item;
-                
-                String school = extractField(srcMap, "school", "schoolName", "school_name", "학교명");
-                String major = extractField(srcMap, "major", "majorName", "department", "전공");
-                String degree = extractField(srcMap, "degree", "degreeType", "학위");
-                String status = extractField(srcMap, "status", "graduationStatus", "졸업여부");
+
+                // [DEBUG] 실제 들어온 키 목록 확인
+                // System.out.println("[DEBUG] Education item keys: " + srcMap.keySet());
+
+                String school = extractField(srcMap, "school", "schoolName", "school_name", "학교명", "대학교", "대학", "University");
+                String major = extractField(srcMap, "major", "majorName", "department", "전공", "학과", "전공명");
+                String degree = extractField(srcMap, "degree", "degreeType", "학위", "학력");
+                String status = extractField(srcMap, "status", "graduationStatus", "졸업여부", "상태");
+                String period = extractField(srcMap, "period", "기간", "졸업년도", "입학~졸업");
 
                 if (school != null) {
                     map.put("school_name", school);
-                    map.put("major", major != null ? major : school); // 전공 없으면 학교명이라도
+                    map.put("major", major != null ? major : school);
                     map.put("degree", degree != null ? degree : "학사");
                     map.put("status", status != null ? status : "졸업");
+                    if (period != null) map.put("period", period);
                     result.add(map);
+                } else {
+                    // school이 없어도 다른 필드가 있으면 처리 시도
+                    String anyValue = extractFirstNonNullValue(srcMap);
+                    if (anyValue != null && !anyValue.isEmpty()) {
+                        map.put("school_name", anyValue);
+                        map.put("major", anyValue);
+                        map.put("degree", "학사");
+                        map.put("status", "졸업");
+                        result.add(map);
+                    }
                 }
             } else if (item instanceof String) {
                 String s = ((String) item).trim();
@@ -318,7 +350,20 @@ public class AiRecommendRequest {
     }
 
     /**
+     * [NEW] Map에서 첫 번째 null이 아닌 값 추출 (Fallback용)
+     */
+    private String extractFirstNonNullValue(Map<?, ?> map) {
+        for (Object value : map.values()) {
+            if (value != null && !value.toString().trim().isEmpty()) {
+                return value.toString().trim();
+            }
+        }
+        return null;
+    }
+
+    /**
      * 프로젝트 정보를 구조화된 Map 리스트로 추출
+     * [FIX] 더 다양한 키 이름 지원
      */
     private List<Map<String, String>> extractProjectList(Object projects) {
         List<Map<String, String>> result = new ArrayList<>();
@@ -335,17 +380,30 @@ public class AiRecommendRequest {
 
         for (Object item : projItems) {
             Map<String, String> map = new HashMap<>();
-            
+
             if (item instanceof Map) {
                 Map<?, ?> srcMap = (Map<?, ?>) item;
-                
-                String title = extractField(srcMap, "title", "projectName", "project_title", "name", "프로젝트명");
-                String desc = extractField(srcMap, "description", "desc", "details", "내용");
-                
+
+                // [DEBUG] 실제 들어온 키 목록 확인
+                // System.out.println("[DEBUG] Project item keys: " + srcMap.keySet());
+
+                String title = extractField(srcMap, "title", "projectName", "project_title", "name", "프로젝트명", "활동명", "경험명");
+                String desc = extractField(srcMap, "description", "desc", "details", "내용", "설명", "활동내용");
+                String period = extractField(srcMap, "period", "기간", "활동기간");
+
                 if (title != null) {
                     map.put("project_title", title);
                     map.put("description", desc != null ? desc : title);
+                    if (period != null) map.put("period", period);
                     result.add(map);
+                } else {
+                    // title이 없어도 다른 필드가 있으면 처리 시도
+                    String anyValue = extractFirstNonNullValue(srcMap);
+                    if (anyValue != null && !anyValue.isEmpty()) {
+                        map.put("project_title", anyValue);
+                        map.put("description", anyValue);
+                        result.add(map);
+                    }
                 }
             } else if (item instanceof String) {
                 String s = ((String) item).trim();
@@ -361,6 +419,7 @@ public class AiRecommendRequest {
 
     /**
      * 경력 정보를 구조화된 Map 리스트로 추출
+     * [FIX] 더 다양한 키 이름 지원
      */
     private List<Map<String, Object>> extractCareerList(Object careers, double experienceYears) {
         List<Map<String, Object>> result = new ArrayList<>();
@@ -382,42 +441,39 @@ public class AiRecommendRequest {
             if (item instanceof Map) {
                 Map<?, ?> map = (Map<?, ?>) item;
 
-                // company_name 추출
-                String companyName = extractField(map, "company", "companyName", "company_name", "회사명");
+                // [DEBUG] 실제 들어온 키 목록 확인
+                // System.out.println("[DEBUG] Career item keys: " + map.keySet());
+
+                // company_name 추출 (더 많은 키 지원)
+                String companyName = extractField(map, "company", "companyName", "company_name", "회사명", "기업명", "직장명");
                 if (companyName == null || companyName.isEmpty()) {
-                    // Map의 첫 번째 값 사용
-                    for (Object val : map.values()) {
-                        if (val != null && !val.toString().trim().isEmpty()) {
-                            companyName = val.toString().trim();
-                            break;
-                        }
-                    }
+                    companyName = extractFirstNonNullValue(map);
                 }
                 careerMap.put("company_name", companyName != null ? companyName : "Unknown");
 
-                // role 추출 (개선된 로직: 너무 긴 텍스트나 설명문은 제외)
-                String role = extractField(map, "role", "position", "직무", "position_name", "job_title");
-                
+                // role 추출 (더 많은 키 지원)
+                String role = extractField(map, "role", "position", "직무", "position_name", "job_title", "직책", "담당업무");
+
                 // 유효성 검사: role이 null이거나, 너무 길거나(50자 초과), 줄바꿈/특수문자가 포함된 경우 무효화
                 if (role == null || role.length() > 50 || role.contains("\n") || role.contains("Key Tasks") || role.contains("- ")) {
-                    // role이 유효하지 않으면 jobCategory 사용
                     role = convertJobCategoryToRole(this.jobCategory);
                 }
-                
+
                 careerMap.put("role", role);
 
-                // period 추출
-                String period = extractField(map, "period", "duration", "기간", "work_period", "근무기간");
+                // period 추출 (더 많은 키 지원)
+                String period = extractField(map, "period", "duration", "기간", "work_period", "근무기간", "재직기간");
                 careerMap.put("period", period != null ? period : null);
 
                 // key_tasks 추출
                 List<String> keyTasks = extractKeyTasks(map);
                 careerMap.put("key_tasks", keyTasks);
 
-                careerMap.put("experience_years", experienceYears);
+                // [FIX] experience_years를 period에서 직접 계산 (0.0 문제 해결)
+                double calculatedYears = calculateExperienceYears(period);
+                careerMap.put("experience_years", calculatedYears > 0 ? calculatedYears : experienceYears);
 
             } else if (item instanceof String) {
-                // String인 경우 fallback 처리
                 String careerStr = ((String) item).trim();
                 if (!careerStr.isEmpty()) {
                     careerMap.put("company_name", careerStr);
@@ -496,12 +552,12 @@ public class AiRecommendRequest {
             return result;
         }
 
-        // List인 경우 그대로 추가
+        // List인 경우 - [FIX] "Key Tasks:" 등 불필요한 prefix 필터링
         if (tasksValue instanceof Iterable) {
             for (Object task : (Iterable<?>) tasksValue) {
                 if (task != null) {
-                    String taskStr = task.toString().trim();
-                    if (!taskStr.isEmpty()) {
+                    String taskStr = cleanTaskString(task.toString());
+                    if (isValidTask(taskStr)) {
                         result.add(taskStr);
                     }
                 }
@@ -515,24 +571,99 @@ public class AiRecommendRequest {
                 if (tasksStr.contains("- ") || tasksStr.contains("\n") || tasksStr.contains("•")) {
                      String[] parts = tasksStr.split("(?=\\s*[-•]\\s)|(?<=[.?!]\\s)|[\n]");
                      for (String part : parts) {
-                         String clean = part.replaceAll("^\\s*[-•]\\s*", "").trim();
-                         if (!clean.isEmpty() && clean.length() > 2) { // 너무 짧은 잡음 제거
+                         String clean = cleanTaskString(part);
+                         if (isValidTask(clean)) {
                              result.add(clean);
                          }
                      }
                 } else {
-                    // (2) 구분자가 딱히 없으면 통으로 넣되, 너무 길면 마침표로 끊기 시도
-                    result.add(tasksStr);
+                    // (2) 구분자가 딱히 없으면 통으로 넣되
+                    String clean = cleanTaskString(tasksStr);
+                    if (isValidTask(clean)) {
+                        result.add(clean);
+                    }
                 }
             }
         }
         else {
-            String taskStr = tasksValue.toString().trim();
-            if (!taskStr.isEmpty()) {
+            String taskStr = cleanTaskString(tasksValue.toString());
+            if (isValidTask(taskStr)) {
                 result.add(taskStr);
             }
         }
 
         return result;
+    }
+
+    /**
+     * [NEW] Task 문자열에서 불필요한 prefix 제거
+     */
+    private String cleanTaskString(String input) {
+        if (input == null) return "";
+        String cleaned = input.trim();
+        // "Key Tasks:", "주요업무:", "담당업무:" 등 prefix 제거
+        cleaned = cleaned.replaceAll("^(Key\\s*Tasks|주요\\s*업무|담당\\s*업무|Responsibilities)\\s*:?\\s*", "");
+        // 글머리 기호 제거
+        cleaned = cleaned.replaceAll("^\\s*[-•*]\\s*", "");
+        return cleaned.trim();
+    }
+
+    /**
+     * [NEW] 유효한 Task인지 검증
+     */
+    private boolean isValidTask(String task) {
+        if (task == null || task.isEmpty()) return false;
+        if (task.length() < 3) return false; // 너무 짧은 잡음 제거
+        // "Key Tasks" 같은 헤더만 남은 경우 제거
+        if (task.equalsIgnoreCase("Key Tasks") || task.equalsIgnoreCase("주요업무") ||
+            task.equalsIgnoreCase("담당업무") || task.equalsIgnoreCase("Responsibilities")) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * [NEW] 기간 문자열에서 경력 년수 계산
+     * 예: "2022.01 - 현재", "2019.03 ~ 2023.06"
+     */
+    private double calculateExperienceYears(String period) {
+        if (period == null || period.isEmpty()) return 0.0;
+
+        try {
+            // "현재", "재직중" 등을 현재 날짜로 치환
+            java.time.LocalDate now = java.time.LocalDate.now();
+
+            // 날짜 패턴 찾기: YYYY.MM 또는 YYYY-MM
+            java.util.regex.Pattern datePattern = java.util.regex.Pattern.compile("(\\d{4})[.\\-/](\\d{1,2})");
+            java.util.regex.Matcher matcher = datePattern.matcher(period);
+
+            java.time.LocalDate startDate = null;
+            java.time.LocalDate endDate = null;
+
+            if (matcher.find()) {
+                int startYear = Integer.parseInt(matcher.group(1));
+                int startMonth = Integer.parseInt(matcher.group(2));
+                startDate = java.time.LocalDate.of(startYear, startMonth, 1);
+
+                if (matcher.find()) {
+                    int endYear = Integer.parseInt(matcher.group(1));
+                    int endMonth = Integer.parseInt(matcher.group(2));
+                    endDate = java.time.LocalDate.of(endYear, endMonth, 1);
+                }
+            }
+
+            // 종료일이 없거나 "현재"가 포함되면 현재 날짜 사용
+            if (endDate == null || period.contains("현재") || period.contains("재직")) {
+                endDate = now;
+            }
+
+            if (startDate != null && endDate != null) {
+                long months = java.time.temporal.ChronoUnit.MONTHS.between(startDate, endDate);
+                return Math.round(months / 12.0 * 10) / 10.0; // 소수점 1자리
+            }
+        } catch (Exception e) {
+            // 파싱 실패 시 0.0 반환
+        }
+        return 0.0;
     }
 }

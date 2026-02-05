@@ -167,7 +167,8 @@ public class InterviewService {
                                 .interviewId(interview.getInterviewId())
                                 .currentTurn(interview.getCurrentTurn())
                                 .question(firstQuestion)
-                                .isCompleted(false)
+                                .isFinished(false)   // 프론트엔드 호환 필드
+                                .isCompleted(false)  // 하위 호환성
                                 .reactionType(aiResponse.getRealtime().getReaction() != null
                                                 ? aiResponse.getRealtime().getReaction().getType()
                                                 : null)
@@ -278,32 +279,76 @@ public class InterviewService {
 
                 // 7. 종료 조건 확인 및 결과 저장
                 boolean isCompleted = false;
+                InterviewQuestionResponse.FinalResult finalResultDto = null;
+
                 if (interview.getCurrentTurn() >= interview.getTotalTurns()) {
                     isCompleted = true;
-                    AiInterviewClient.AiFinalizeResponse finalResult = aiInterviewClient.finalizeInterview(
-                        interview.getInterviewId().toString(),
+                    // [FIX] interviewId가 아닌 userId로 세션 조회해야 함 (Python 세션 키 = userId)
+                    AiInterviewClient.AiFinalizeResponse aiFinalize = aiInterviewClient.finalizeInterview(
+                        userId.toString(),
                         buildChatHistory(interview.getInterviewId())
                     );
 
-                    if (finalResult.getTotalScore() != null) {
-                         // [Modified] Save detailed stats as JSON in finalFeedback
-                         String feedbackJson = finalResult.getError(); 
+                    // AI 서버 응답 처리 (에러 체크 포함)
+                    boolean hasValidScore = aiFinalize.getTotalScore() != null && aiFinalize.getError() == null;
+
+                    if (hasValidScore) {
+                         // 점수 계산: AI 서버가 0~5 범위 반환 -> 100점 만점으로 변환
+                         int calculatedScore = (int) Math.round(aiFinalize.getTotalScore() * 20);
+                         // 최소 50점 보장 (0점 방지)
+                         calculatedScore = Math.max(50, calculatedScore);
+
+                         // 피드백 JSON 구성
+                         String feedbackJson;
                          try {
                              Map<String, Object> reportData = new HashMap<>();
-                             reportData.put("summary", finalResult.getResult());
-                             reportData.put("stats", finalResult.getStats());
+                             reportData.put("summary", aiFinalize.getResult());
+                             reportData.put("stats", aiFinalize.getStats());
+                             reportData.put("competencyScores", aiFinalize.getCompetencyScores());
+                             reportData.put("strengths", aiFinalize.getStrengths());
+                             reportData.put("gaps", aiFinalize.getGaps());
                              feedbackJson = objectMapper.writeValueAsString(reportData);
                          } catch (Exception e) {
                              log.error("Failed to serialize feedback JSON", e);
-                             feedbackJson = finalResult.getResult(); 
+                             feedbackJson = aiFinalize.getResult() != null ? aiFinalize.getResult() : "Interview completed";
                          }
 
-                         interview.completeInterview(
-                            (int) Math.round(finalResult.getTotalScore() * 20),
-                            feedbackJson
-                        );
+                         interview.completeInterview(calculatedScore, feedbackJson);
+
+                         // FinalResult DTO 구성 (프론트엔드 호환)
+                         finalResultDto = InterviewQuestionResponse.FinalResult.builder()
+                             .finalScore(calculatedScore)
+                             .result(aiFinalize.getResult())
+                             .finalFeedback(aiFinalize.getFinalFeedback() != null ? aiFinalize.getFinalFeedback() : feedbackJson)
+                             .competencyScores(aiFinalize.getCompetencyScores())
+                             .strengths(aiFinalize.getStrengths())
+                             .gaps(aiFinalize.getGaps())
+                             .build();
                     } else {
-                         interview.completeInterview(80, "Pass");
+                         // AI 서버 오류 또는 데이터 없음 시 기본값
+                         log.warn("AI finalize returned error or no score: {}", aiFinalize.getError());
+                         String defaultFeedback;
+                         try {
+                             Map<String, Object> reportData = new HashMap<>();
+                             reportData.put("summary", "Completed");
+                             reportData.put("stats", Map.of("question_count", interview.getCurrentTurn()));
+                             reportData.put("competencyScores", Map.of("종합", 2.5));
+                             reportData.put("strengths", List.of());  // 빈 배열 - 참여 자체는 강점 아님
+                             reportData.put("gaps", List.of("답변 분석 중 오류가 발생했습니다. 재시도해 주세요."));
+                             defaultFeedback = objectMapper.writeValueAsString(reportData);
+                         } catch (Exception e) {
+                             defaultFeedback = "Interview completed";
+                         }
+
+                         interview.completeInterview(50, defaultFeedback);  // 최소 점수로 설정
+                         finalResultDto = InterviewQuestionResponse.FinalResult.builder()
+                             .finalScore(50)
+                             .result("Incomplete")
+                             .finalFeedback("면접 분석 중 오류가 발생했습니다. 다시 시도해주세요.")
+                             .competencyScores(Map.of("종합", 2.5))
+                             .strengths(List.of())  // 빈 배열
+                             .gaps(List.of("AI 서버 연결 오류로 상세 분석이 불가능합니다."))
+                             .build();
                     }
                 }
 
@@ -311,10 +356,14 @@ public class InterviewService {
 
                 // 8. 응답 반환
                 return InterviewQuestionResponse.builder()
-                                .isCompleted(isCompleted)
+                                .isFinished(isCompleted)  // 프론트엔드 호환 필드
+                                .isCompleted(isCompleted) // 하위 호환성
                                 .question(nextQuestion)
                                 .interviewId(interview.getInterviewId())
                                 .currentTurn(interview.getCurrentTurn())
+                                .finalResult(finalResultDto)  // 최종 결과 포함
+                                .finalScore(finalResultDto != null ? finalResultDto.getFinalScore() : null)
+                                .finalFeedback(finalResultDto != null ? finalResultDto.getFinalFeedback() : null)
                                 .aiSystemReport(aiResponse.getRealtime().getReport())
                                 .requestedEvidence(aiResponse.getRealtime().getRequestedEvidence())
                                 .probeGoal(aiResponse.getRealtime().getProbeGoal())
@@ -422,19 +471,63 @@ public class InterviewService {
                                 .interviewId(interview.getInterviewId())
                                 .currentTurn(interview.getCurrentTurn())
                                 .question(nextQuestion)
-                                .isCompleted(false)
+                                .isFinished(false)   // 프론트엔드 호환 필드
+                                .isCompleted(false)  // 하위 호환성
                                 .build();
         }
 
         /**
          * 면접 결과 조회
          */
+        @SuppressWarnings("unchecked")
         public InterviewResultDTO getInterviewResult(Long userId, Long interviewId) {
                 Interview interview = interviewRepository.findByInterviewIdAndUserId(interviewId, userId)
                                 .orElseThrow(() -> new IllegalArgumentException("면접을 찾을 수 없습니다"));
 
                 List<InterviewMessage> messages = interviewMessageRepository
                                 .findByInterviewIdOrderByTurnNumberAsc(interviewId);
+
+                // finalFeedback JSON 파싱하여 세부 분석 데이터 추출
+                Map<String, Double> competencyScores = null;
+                List<String> strengths = null;
+                List<String> gaps = null;
+                String feedbackText = interview.getFinalFeedback();
+
+                if (feedbackText != null && feedbackText.startsWith("{")) {
+                    try {
+                        Map<String, Object> feedbackData = objectMapper.readValue(feedbackText,
+                            new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+
+                        // competencyScores 파싱
+                        Object scoresObj = feedbackData.get("competencyScores");
+                        if (scoresObj instanceof Map) {
+                            Map<String, Object> rawScores = (Map<String, Object>) scoresObj;
+                            competencyScores = new HashMap<>();
+                            for (Map.Entry<String, Object> entry : rawScores.entrySet()) {
+                                if (entry.getValue() instanceof Number) {
+                                    competencyScores.put(entry.getKey(), ((Number) entry.getValue()).doubleValue());
+                                }
+                            }
+                        }
+
+                        // strengths 파싱
+                        Object strengthsObj = feedbackData.get("strengths");
+                        if (strengthsObj instanceof List) {
+                            strengths = (List<String>) strengthsObj;
+                        }
+
+                        // gaps 파싱
+                        Object gapsObj = feedbackData.get("gaps");
+                        if (gapsObj instanceof List) {
+                            gaps = (List<String>) gapsObj;
+                        }
+
+                        log.info("Parsed feedback data: competencyScores={}, strengths={}, gaps={}",
+                            competencyScores, strengths, gaps);
+                    } catch (Exception e) {
+                        log.warn("Failed to parse finalFeedback JSON: {}", e.getMessage());
+                    }
+                }
 
                 return InterviewResultDTO.builder()
                                 .interviewId(interview.getInterviewId())
@@ -446,7 +539,10 @@ public class InterviewService {
                                 .currentTurn(interview.getCurrentTurn())
                                 .status(interview.getStatus().name())
                                 .finalScore(interview.getFinalScore())
-                                .finalFeedback(interview.getFinalFeedback())
+                                .finalFeedback(feedbackText)
+                                .competencyScores(competencyScores)
+                                .strengths(strengths)
+                                .gaps(gaps)
                                 .createdAt(interview.getCreatedAt())
                                 .completedAt(interview.getCompletedAt())
                                 .messages(messages.stream()

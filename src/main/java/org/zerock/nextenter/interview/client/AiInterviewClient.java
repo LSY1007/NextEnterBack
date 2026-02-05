@@ -130,7 +130,7 @@ public class AiInterviewClient {
             HttpEntity<String> requestEntity = new HttpEntity<>(jsonBody, headers);
 
             // 3. Send Request
-            String url = aiServerUrl + "/interview/finalize";
+            String url = aiServerUrl + "/interview/complete"; // [Modified] Changed endpoint to bypass 404
             log.info("🚀 [AI-FINALIZE] POST Request to: {}", url);
 
             ResponseEntity<String> responseEntity = directRestTemplate.postForEntity(url, requestEntity, String.class);

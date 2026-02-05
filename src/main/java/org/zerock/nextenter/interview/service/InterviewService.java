@@ -210,9 +210,6 @@ public class InterviewService {
                 // 4. AI에게 답변 전송
                 Map<String, Object> resumeContent = buildResumeContent(resume);
                 
-                // [DEBUG] Check Project Experience raw data
-                log.info("🔍 [DEBUG] Raw Project Experience JSON: {}", resume.getExperiences());
-
                 List<String> portfolioFiles = portfolioRepository
                                 .findByResumeIdOrderByDisplayOrder(resume.getResumeId())
                                 .stream()
@@ -220,59 +217,40 @@ public class InterviewService {
                                 .collect(Collectors.toList());
 
                 // [NEW] History 구성 (현재 답변 제외, 이전 내역만)
-                // 왜냐하면 last_answer로 현재 답변을 별도로 보내기 때문
                 List<Map<String, Object>> fullHistory = buildChatHistory(interview.getInterviewId());
-                log.info("🔍 [DEBUG] Built Chat History for Interview ID {}: {} items", interview.getInterviewId(), fullHistory.size());
-
                 List<Map<String, Object>> chatHistory = fullHistory.stream().collect(Collectors.toList());
                 if (!chatHistory.isEmpty()) {
                         Map<String, Object> last = chatHistory.get(chatHistory.size() - 1);
-                        // If the last item is the USER's current answer, remove it.
-                        // (Since we are sending it via lastAnswer field)
                         if ("user".equals(last.get("role"))) {
                                 chatHistory.remove(chatHistory.size() - 1);
-                                log.info("🔍 [DEBUG] Removed duplicate user answer from history.");
                         }
                 }
 
-                // [NEW] Classification & Evaluation Objects
                 Map<String, Object> classification = new HashMap<>();
-                // classification(분류): 지원자 이력서 기반 직무 (Resume 기반)
-                String resumeRole = org.zerock.nextenter.common.constants.JobConstants
-                                .normalize(resume.getJobCategory());
+                String resumeRole = org.zerock.nextenter.common.constants.JobConstants.normalize(resume.getJobCategory());
                 classification.put("predicted_role", resumeRole);
                 
                 Map<String, Object> evaluation = new HashMap<>();
-                // evaluation(평가): 초기값이므로 비워두거나 기본값 설정
-                
-                // target_role(목표): 기업 채용 기준/면접 대상 직무 (Interview 기반)
-                String interviewRole = org.zerock.nextenter.common.constants.JobConstants
-                                .normalize(interview.getJobCategory());
+                String interviewRole = org.zerock.nextenter.common.constants.JobConstants.normalize(interview.getJobCategory());
 
                 AiInterviewRequest aiRequest = AiInterviewRequest.builder()
                                 .id(userId.toString())
-                                .targetRole(interviewRole) // Normalized Target Role
+                                .targetRole(interviewRole)
                                 .resumeContent(resumeContent)
                                 .lastAnswer(request.getAnswer())
                                 .portfolioFiles(portfolioFiles)
-                                .totalTurns(interview.getTotalTurns()) // ✅ 횟수 정보 추가
-                                .difficulty(interview.getDifficulty().name()) // ✅ 난이도 전달
-                                .chatHistory(chatHistory) // ✅ 대화 내역 전달 (Lombok builder uses field name)
-                                .classification(classification) // ✅ 분류 정보 추가 (이력서 기반)
-                                .evaluation(evaluation) // ✅ 평가 정보 추가 (null 방지)
+                                .totalTurns(interview.getTotalTurns())
+                                .difficulty(interview.getDifficulty().name())
+                                .chatHistory(chatHistory)
+                                .classification(classification)
+                                .evaluation(evaluation)
                                 .build();
-
-                // Note: AiInterviewRequest 필드명이 chat_history(서버) vs chatHistory(DTO) 확인 필요
-                // AiInterviewClient.java 의 AiInterviewRequest 내용을 보면 @JsonProperty("chat_history") 가 붙어있으므로 chatHistory 필드를 쓰면 됨.
-                // 하지만 builder() 사용 시 필드명을 맞춰야 함.
                 aiRequest.setChatHistory(chatHistory); 
 
                 AiInterviewResponse aiResponse = aiInterviewClient.getNextQuestion(aiRequest);
                 String nextQuestion = aiResponse.getRealtime().getNextQuestion();
-                // 리포트 처리 (마지막 턴 or AI가 pass_fail 판단 시)
-                // if (aiResponse.getRealtime().getReport() != null) { ... } // Logic removed as variables were unused
 
-                // 5. AI 답변 저장 (Interviewer Role) - [FIX] 종료 체크를 저장 후로 이동
+                // 5. AI 답변 저장 (Interviewer Role)
                 interview.incrementTurn();
                 InterviewMessage questionMessage = InterviewMessage.builder()
                                 .interviewId(interview.getInterviewId())
@@ -282,7 +260,7 @@ public class InterviewService {
                                 .build();
                 interviewMessageRepository.save(questionMessage);
 
-                // 6. AI 분석 결과 저장 (System Role - State Restoration)
+                // 6. AI 분석 결과 저장 (System Role)
                 if (aiResponse.getRealtime() != null && aiResponse.getRealtime().getAnalysisResult() != null) {
                     try {
                         String analysisJson = objectMapper.writeValueAsString(aiResponse.getRealtime().getAnalysisResult());
@@ -293,31 +271,40 @@ public class InterviewService {
                                 .message(analysisJson)
                                 .build();
                         interviewMessageRepository.save(analysisMessage);
-                        log.info("💾 [System] Analysis saved for turn {}", interview.getCurrentTurn());
                     } catch (Exception e) {
                         log.error("Failed to save analysis result", e);
                     }
                 }
 
-                // 7. 종료 조건 확인 (Turn 7 도달 시 Finalize)
+                // 7. 종료 조건 확인 및 결과 저장
                 boolean isCompleted = false;
                 if (interview.getCurrentTurn() >= interview.getTotalTurns()) {
                     isCompleted = true;
-                    // 마지막 메시지("수고하셨습니다")가 저장된 상태에서 최종 점수 산출
                     AiInterviewClient.AiFinalizeResponse finalResult = aiInterviewClient.finalizeInterview(
                         interview.getInterviewId().toString(),
                         buildChatHistory(interview.getInterviewId())
                     );
 
                     if (finalResult.getTotalScore() != null) {
+                         // [Modified] Save detailed stats as JSON in finalFeedback
+                         String feedbackJson = finalResult.getError(); 
+                         try {
+                             Map<String, Object> reportData = new HashMap<>();
+                             reportData.put("summary", finalResult.getResult());
+                             reportData.put("stats", finalResult.getStats());
+                             feedbackJson = objectMapper.writeValueAsString(reportData);
+                         } catch (Exception e) {
+                             log.error("Failed to serialize feedback JSON", e);
+                             feedbackJson = finalResult.getResult(); 
+                         }
+
                          interview.completeInterview(
                             (int) Math.round(finalResult.getTotalScore() * 20),
-                            finalResult.getResult()
+                            feedbackJson
                         );
                     } else {
-                         interview.completeInterview(80, "Pass"); // Fallback
+                         interview.completeInterview(80, "Pass");
                     }
-                    log.info("🏁 Interview Completed: ID={}, Score={}", interview.getInterviewId(), interview.getFinalScore());
                 }
 
                 interviewRepository.save(interview);
@@ -379,11 +366,6 @@ public class InterviewService {
                 String normalizedJobCategory = org.zerock.nextenter.common.constants.JobConstants
                                 .normalize(interview.getJobCategory());
 
-                // [NEW] History 구성 (수정 대상인 마지막 답변 이전까지의 History)
-                // request.getAnswer()가 새로운 답변이 됨.
-                // buildChatHistory는 DB에 있는 모든 메시지를 가져옴.
-                // 하지만 수정 로직에서는 "기존 답변"을 대체하는 것이므로, 
-                // DB에 저장된 "기존 답변"과 그 이후의 "다음 질문"은 제외해야 함.
                 // 로직: targetTurn 이전까지의 메시지만 History로 간주.
                 
                 List<Map<String, Object>> chatHistory = buildChatHistory(interview.getInterviewId()).stream()

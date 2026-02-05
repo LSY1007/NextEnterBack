@@ -27,6 +27,11 @@ public class InterviewResultDTO {
     private LocalDateTime createdAt;
     private LocalDateTime completedAt;
 
+    // AI 상세 분석 결과
+    private java.util.Map<String, Double> competencyScores;
+    private java.util.List<String> strengths;
+    private java.util.List<String> gaps;
+
     // 면접 질문/답변 내역
     private List<MessageDto> messages;
 

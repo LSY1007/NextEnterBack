@@ -34,7 +34,7 @@ class ResumeStructureParserTest {
             e.printStackTrace();
         }
 
-        List<Map<String, String>> careers = objectMapper.readValue(careersJson, List.class);
+        List<Map<String, String>> careers = objectMapper.readValue(careersJson, new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, String>>>() {});
         
         // We expect 2 career items
         assertEquals(2, careers.size(), "Should find 2 career items");

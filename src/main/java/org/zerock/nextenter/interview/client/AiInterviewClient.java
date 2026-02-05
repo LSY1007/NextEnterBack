@@ -130,7 +130,7 @@ public class AiInterviewClient {
             HttpEntity<String> requestEntity = new HttpEntity<>(jsonBody, headers);
 
             // 3. Send Request
-            String url = aiServerUrl + "/api/v1/interview/finalize";
+            String url = aiServerUrl + "/interview/finalize";
             log.info("🚀 [AI-FINALIZE] POST Request to: {}", url);
 
             ResponseEntity<String> responseEntity = directRestTemplate.postForEntity(url, requestEntity, String.class);

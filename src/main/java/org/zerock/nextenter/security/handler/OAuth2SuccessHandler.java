@@ -21,7 +21,7 @@ import java.util.Map;
 @Slf4j
 public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler {
 
-        private final JWTUtil jwtUtil;
+
 
         @Override
         public void onAuthenticationSuccess(HttpServletRequest request,

@@ -1,14 +1,11 @@
 package org.zerock.nextenter.resume.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import java.util.List;
-import java.util.Map;
+
 
 public class ResumeParserDebug {
 
     public static void main(String[] args) throws Exception {
         ResumeStructureParser parser = new ResumeStructureParser();
-        ObjectMapper objectMapper = new ObjectMapper();
 
         String rawText = 
             "[경력]\n" +

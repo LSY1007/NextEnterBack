@@ -647,17 +647,7 @@ public class ResumeService {
         return filename.substring(filename.lastIndexOf(".") + 1);
     }
 
-    private String maskName(String name) {
-        if (name == null || name.length() < 2)
-            return "익명";
-        if (isKorean(name.charAt(0)))
-            return name.charAt(0) + "**";
-        return name.charAt(0) + "**";
-    }
 
-    private boolean isKorean(char c) {
-        return (c >= '\uac00' && c <= '\ud7a3');
-    }
 
     private List<String> parseSkills(String skills) {
         if (skills == null || skills.isEmpty())

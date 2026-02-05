@@ -275,7 +275,7 @@ public class JobPostingService {
                 .companyName(companyName)
                 .logoUrl(logoUrl)
                 .thumbnailUrl(jobPosting.getThumbnailUrl())
-                .detailImageUrl(jobPosting.getDetailImageUrl()) // ✅ 추가
+                .detailImageUrl(jobPosting.getDetailImageUrl())
                 .jobCategory(jobPosting.getJobCategory())
                 .location(jobPosting.getLocation())
                 .locationCity(jobPosting.getLocationCity())
@@ -283,6 +283,7 @@ public class JobPostingService {
                 .experienceMax(jobPosting.getExperienceMax())
                 .salaryMin(jobPosting.getSalaryMin())
                 .salaryMax(jobPosting.getSalaryMax())
+                .description(jobPosting.getDescription()) // ✅ 추가: 상세 설명 매핑
                 .deadline(jobPosting.getDeadline())
                 .status(jobPosting.getStatus().name())
                 .viewCount(jobPosting.getViewCount())

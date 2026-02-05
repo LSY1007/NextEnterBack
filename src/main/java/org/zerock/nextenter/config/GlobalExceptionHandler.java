@@ -1,10 +1,12 @@
 package org.zerock.nextenter.config;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.catalina.connector.ClientAbortException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -14,6 +16,13 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    // ✅ ClientAbortException 핸들러 추가 - 클라이언트 연결 끊김 처리
+    @ExceptionHandler({ClientAbortException.class, AsyncRequestNotUsableException.class})
+    public void handleClientAbortException(Exception e) {
+        // 클라이언트가 연결을 끊은 경우 로그만 남기고 응답하지 않음
+        log.warn("⚠️ [Client Disconnected] {}: {}", e.getClass().getSimpleName(), e.getMessage());
+    }
 
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<Map<String, Object>> handleIllegalStateException(IllegalStateException e) {

@@ -94,9 +94,7 @@ public class InterviewService {
                                 .resumeId(request.getResumeId())
                                 .jobCategory(normalizedJobCategory) // Normalized
                                 .difficulty(difficulty)
-<<<<<<< Updated upstream
                                 .totalTurns(requestTotalTurns)
-                                .totalTurns(request.getTotalTurns() != null ? request.getTotalTurns() : 7) // [FIX] 기본값 7 (6질문 + 1종료)
                                 .currentTurn(0)
                                 .status(Status.IN_PROGRESS)
                                 .build();
@@ -129,7 +127,6 @@ public class InterviewService {
                 AiInterviewRequest aiRequest = AiInterviewRequest.builder()
                                 .id(userId.toString())
                                 .targetRole(normalizedJobCategory) // Normalized
-                                .resumeContent(resumeContent)
                                 .resumeContent(resumeContent)
                                 .lastAnswer(null) // 첫 질문이므로 null
                                 .portfolioFiles(portfolioFiles)
@@ -615,16 +612,18 @@ public class InterviewService {
             return java.util.Arrays.stream(skills.split(","))
                     .map(String::trim)
                     .filter(s -> !s.isEmpty())
+                    .collect(Collectors.toList());
+        }
 
-            List<InterviewMessage> messages = interviewMessageRepository.findByInterviewIdOrderByTurnNumberAsc(interviewId);
         private List<Map<String, Object>> buildChatHistory(Long interviewId) {
+            List<InterviewMessage> messages = interviewMessageRepository.findByInterviewIdOrderByTurnNumberAsc(interviewId);
             return messages.stream()
                 .map(msg -> {
-                    if (msg.getRole() == Role.SYSTEM) {
                     Map<String, Object> item = new HashMap<>();
+                    if (msg.getRole() == Role.SYSTEM) {
                         item.put("role", "system");
                         item.put("type", "analysis");
-                            // Parse JSON string back to Map/Object for Python
+                        // Parse JSON string back to Map/Object for Python
                         try {
                             item.put("content", objectMapper.readValue(msg.getMessage(), new TypeReference<Map<String, Object>>() {}));
                         } catch (Exception e) {
@@ -640,8 +639,9 @@ public class InterviewService {
                         item.put("type", (msg.getRole() == Role.INTERVIEWER) ? "question" : "answer");
                     }
                     return item;
-                .collect(Collectors.toList());
                 })
+                .collect(Collectors.toList());
+        }
         /**
          * 경력 기술서 JSON에서 총 경력 기간(개월 -> 년) 계산
          */
@@ -655,17 +655,15 @@ public class InterviewService {
                                 return 0;
                         }
                         
-                        for (Map<String, Object> career : careers) {
                         int totalMonths = 0;
-                                        Object periodObj = career.get("period");
-                                if (career.containsKey("period")) {
-                                        if (periodObj != null) {
-                                                totalMonths += parsePeriodToMonths(periodObj.toString());
-                                        }
+                        for (Map<String, Object> career : careers) {
+                                Object periodObj = career.get("period");
+                                if (periodObj != null) {
+                                        totalMonths += parsePeriodToMonths(periodObj.toString());
                                 }
                         }
-                } catch (Exception e) {
                         return totalMonths / 12;
+                } catch (Exception e) {
                         log.warn("경력 기간 계산 실패: {}", e.getMessage());
                         return 0;
                 }

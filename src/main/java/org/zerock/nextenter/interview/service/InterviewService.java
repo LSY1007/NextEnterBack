@@ -207,8 +207,180 @@ public class InterviewService {
                                 .build();
                 interviewMessageRepository.save(answerMessage);
 
+<<<<<<< HEAD
                 // 4. AI에게 답변 전송
                 Map<String, Object> resumeContent = buildResumeContent(resume);
+=======
+        // 직무 정규화
+        String normalizedJobCategory = org.zerock.nextenter.common.constants.JobConstants
+                .normalize(request.getJobCategory());
+
+        int requestTotalTurns = request.getTotalTurns() != null ? request.getTotalTurns() : 5;
+        if (requestTotalTurns < 3) {
+            log.warn("Requested totalTurns {} is too small. Forcing minimum 3.", requestTotalTurns);
+            requestTotalTurns = 3;
+        }
+
+        // 4. 면접 세션 생성
+        Interview interview = Interview.builder()
+                .userId(userId)
+                .resumeId(request.getResumeId())
+                .jobCategory(normalizedJobCategory)
+                .difficulty(difficulty)
+                .totalTurns(requestTotalTurns)
+                .currentTurn(0)
+                .status(Status.IN_PROGRESS)
+                .build();
+
+        interviewRepository.save(interview);
+        log.info("면접 세션 생성 완료: interviewId={}, userId={}, jobCategory={}",
+                interview.getInterviewId(), userId, normalizedJobCategory);
+
+        // 5. Context 구성
+        Map<String, Object> resumeContent = buildResumeContent(resume);
+
+        List<String> portfolioFiles = portfolioRepository
+                .findByResumeIdOrderByDisplayOrder(request.getResumeId())
+                .stream()
+                .map(Portfolio::getFilePath)
+                .collect(Collectors.toList());
+
+        log.info("========================================");
+        log.info("🤖 [AI-REQUEST] AI 엔진 요청 준비");
+        log.info("🤖 [AI-REQUEST] userId: {}", userId);
+        log.info("🤖 [AI-REQUEST] targetRole: {}", normalizedJobCategory);
+        log.info("========================================");
+
+        // 6. AI에게 첫 질문 요청
+        AiInterviewRequest aiRequest = AiInterviewRequest.builder()
+                .id(userId.toString())
+                .targetRole(normalizedJobCategory)
+                .resumeContent(resumeContent)
+                .lastAnswer(null) // 첫 질문이므로 null
+                .portfolioFiles(portfolioFiles)
+                .totalTurns(interview.getTotalTurns())
+                .difficulty(interview.getDifficulty().name())
+                .chatHistory(Collections.emptyList())
+                .build();
+
+        AiInterviewResponse aiResponse;
+        try {
+            aiResponse = aiInterviewClient.getNextQuestion(aiRequest);
+            log.info("✅ [AI-RESPONSE] AI Server 응답 성공: {}", aiResponse.getRealtime().getNextQuestion());
+        } catch (Exception e) {
+            log.error("❌ [AI-RESPONSE] AI Server 연동 실패", e);
+            throw new RuntimeException("AI 서버 연동 실패: " + e.getMessage());
+        }
+
+        String firstQuestion = aiResponse.getRealtime().getNextQuestion();
+
+        // 7. 첫 질문 저장
+        InterviewMessage questionMessage = InterviewMessage.builder()
+                .interviewId(interview.getInterviewId())
+                .turnNumber(1)
+                .role(Role.INTERVIEWER)
+                .message(firstQuestion)
+                .build();
+        interviewMessageRepository.save(questionMessage);
+
+        interview.incrementTurn();
+        interviewRepository.save(interview);
+
+        return InterviewQuestionResponse.builder()
+                .interviewId(interview.getInterviewId())
+                .currentTurn(interview.getCurrentTurn())
+                .question(firstQuestion)
+                .isCompleted(false)
+                .reactionType(aiResponse.getRealtime().getReaction() != null
+                        ? aiResponse.getRealtime().getReaction().getType()
+                        : null)
+                .reactionText(aiResponse.getRealtime().getReaction() != null
+                        ? aiResponse.getRealtime().getReaction().getText()
+                        : null)
+                .aiSystemReport(aiResponse.getRealtime().getReport())
+                .requestedEvidence(aiResponse.getRealtime().getRequestedEvidence())
+                .probeGoal(aiResponse.getRealtime().getProbeGoal())
+                .build();
+    }
+
+    /**
+     * 답변 제출 및 다음 질문 받기
+     */
+    @Transactional
+    public InterviewQuestionResponse submitAnswer(Long userId, InterviewMessageRequest request) {
+        // 1. 면접 세션 조회
+        Interview interview = interviewRepository.findByInterviewIdAndUserId(
+                request.getInterviewId(), userId)
+                .orElseThrow(() -> new IllegalArgumentException("면접을 찾을 수 없습니다"));
+
+        if (interview.getStatus() != Status.IN_PROGRESS) {
+            throw new IllegalStateException("진행 중인 면접이 아닙니다");
+        }
+
+        // 2. 이력서 조회
+        Resume resume = resumeRepository.findById(interview.getResumeId())
+                .orElseThrow(() -> new IllegalStateException("이력서 정보를 찾을 수 없습니다."));
+
+        InterviewMessage answerMessage = InterviewMessage.builder()
+                .interviewId(interview.getInterviewId())
+                .turnNumber(interview.getCurrentTurn())
+                .role(Role.CANDIDATE)
+                .message(request.getAnswer())
+                .build();
+        interviewMessageRepository.save(answerMessage);
+        
+        // [DEBUG] Log saved answer
+        System.out.println("💾 [Service] Saved Answer Message. Turn: " + interview.getCurrentTurn() + ", Content: " + request.getAnswer());
+
+        // 4. AI에게 답변 전송
+        Map<String, Object> resumeContent = buildResumeContent(resume);
+
+        List<String> portfolioFiles = portfolioRepository
+                .findByResumeIdOrderByDisplayOrder(resume.getResumeId())
+                .stream()
+                .map(Portfolio::getFilePath)
+                .collect(Collectors.toList());
+
+        // [NEW] History 구성
+        List<Map<String, Object>> fullHistory = buildChatHistory(interview.getInterviewId());
+        
+        // Remove the duplicated recent user answer if present (since it's sent as lastAnswer)
+        List<Map<String, Object>> chatHistory = fullHistory.stream().collect(Collectors.toList());
+        if (!chatHistory.isEmpty()) {
+             Map<String, Object> last = chatHistory.get(chatHistory.size() - 1);
+             // [DEBUG] Log last history item
+             System.out.println("🔍 [Service] Last history item role: " + last.get("role") + ", Content: " + last.get("content"));
+             
+             if ("user".equals(last.get("role"))) {
+                 chatHistory.remove(chatHistory.size() - 1);
+                 System.out.println("✂️ [Service] Removed last user message from history to avoid duplication with 'lastAnswer'");
+             }
+        }
+
+        // Classification Objects
+        Map<String, Object> classification = new HashMap<>();
+        String resumeRole = org.zerock.nextenter.common.constants.JobConstants
+                .normalize(resume.getJobCategory());
+        classification.put("predicted_role", resumeRole);
+        
+        Map<String, Object> evaluation = new HashMap<>();
+
+        String interviewRole = org.zerock.nextenter.common.constants.JobConstants
+                .normalize(interview.getJobCategory());
+
+        AiInterviewRequest aiRequest = AiInterviewRequest.builder()
+                .id(userId.toString())
+                .targetRole(interviewRole)
+                .resumeContent(resumeContent)
+                .lastAnswer(request.getAnswer())
+                .portfolioFiles(portfolioFiles)
+                .totalTurns(interview.getTotalTurns())
+                .difficulty(interview.getDifficulty().name())
+                .chatHistory(chatHistory)
+                .classification(classification)
+                .evaluation(evaluation)
+                .build();
+>>>>>>> origin/develop
                 
                 // [DEBUG] Check Project Experience raw data
                 log.info("🔍 [DEBUG] Raw Project Experience JSON: {}", resume.getExperiences());

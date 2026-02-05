@@ -199,6 +199,7 @@ public class ResumeService {
                 .resumeAddress(request.getResumeAddress())
                 .resumeDetailAddress(request.getResumeDetailAddress())
                 .profileImage(request.getProfileImage())
+                .desiredSalary(request.getDesiredSalary())
                 // ===== 분리된 섹션들 저장 =====
                 .experiences(request.getExperiences())
                 .certificates(request.getCertificates())
@@ -269,6 +270,9 @@ public class ResumeService {
         }
         if (request.getProfileImage() != null) {
             resume.setProfileImage(request.getProfileImage());
+        }
+        if (request.getDesiredSalary() != null) {
+            resume.setDesiredSalary(request.getDesiredSalary());
         }
 
         // ===== 분리된 섹션들 업데이트 =====
@@ -401,9 +405,8 @@ public class ResumeService {
             // User 정보 조회
             User user = userRepository.findById(resume.getUserId()).orElse(null);
 
-            // 이름 추출
+            // 이름 추출 (마스킹 제거)
             String realName = (user != null && user.getName() != null) ? user.getName() : "익명";
-            String maskedName = maskName(realName);
 
             // 기술 스택 파싱
             List<String> skillsList = parseSkills(resume.getSkills());
@@ -428,15 +431,21 @@ public class ResumeService {
                 }
             }
 
+            // 지역 및 희망 연봉 추출
+            String location = (resume.getResumeAddress() != null && !resume.getResumeAddress().trim().isEmpty()) 
+                    ? resume.getResumeAddress() : "미지정";
+            String salaryRange = (resume.getDesiredSalary() != null && !resume.getDesiredSalary().trim().isEmpty()) 
+                    ? resume.getDesiredSalary() : "협의";
+
             return TalentSearchResponse.builder()
                     .resumeId(resume.getResumeId())
                     .userId(resume.getUserId())
-                    .name(maskedName)
+                    .name(realName)
                     .jobCategory(resume.getJobCategory())
                     .skills(skillsList)
-                    .location("미지정")
+                    .location(location)
                     .experienceYears(experienceYears)
-                    .salaryRange("협의")
+                    .salaryRange(salaryRange)
                     .matchScore(matchScore)
                     .isAvailable(true)
                     .viewCount(resume.getViewCount())
@@ -580,6 +589,7 @@ public class ResumeService {
                 .resumeAddress(resume.getResumeAddress())
                 .resumeDetailAddress(resume.getResumeDetailAddress())
                 .profileImage(resume.getProfileImage())
+                .desiredSalary(resume.getDesiredSalary())
                 .experiences(resume.getExperiences())
                 .certificates(resume.getCertificates())
                 .educations(resume.getEducations())

@@ -43,11 +43,12 @@ public class AiInterviewClient {
         String maskedAnswer = maskPII(request.getLastAnswer());
         request.setLastAnswer(maskedAnswer);
 
-        // 2. STAR Technique Enforcement (Conversate)
+        // 2. Interview Technique Guidance (Conversate - STAR 직접 언급 금지)
         if (request.getSystemInstruction() == null) {
             request.setSystemInstruction(
-                    "Please provide feedback based on the STAR (Situation, Task, Action, Result) technique. " +
-                    "If the answer lacks specific actions or results, ask follow-up questions to clarify."
+                    "Evaluate answers for: specific situation context, clear tasks/goals, concrete actions taken, and measurable results. " +
+                    "If the answer lacks specifics, ask natural follow-up questions in Korean. " +
+                    "IMPORTANT: Never mention 'STAR', 'STARR', or any methodology names directly to the candidate."
             );
         }
 
@@ -162,10 +163,20 @@ public class AiInterviewClient {
     public static class AiFinalizeResponse {
         @JsonProperty("total_score")
         private Double totalScore;
-        
+
         private String result;
         private Map<String, Object> stats;
         private String error;
+
+        // 면접 완료 시 세부 분석 데이터
+        @JsonProperty("competency_scores")
+        private Map<String, Number> competencyScores;
+
+        private List<String> strengths;
+        private List<String> gaps;
+
+        @JsonProperty("final_feedback")
+        private String finalFeedback;
     }
 
     @Data

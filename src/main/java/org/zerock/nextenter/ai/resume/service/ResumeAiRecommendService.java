@@ -175,7 +175,9 @@ public class ResumeAiRecommendService {
 
     /**
      * JSON 필드를 읽기 쉬운 텍스트로 변환하여 StringBuilder에 추가합니다.
+     * [FIX] Map.toString() 대신 필드별로 읽기 좋은 형태로 변환
      */
+    @SuppressWarnings("unchecked")
     private void appendJsonField(StringBuilder sb, String title, String jsonField) {
         if (jsonField == null || jsonField.trim().isEmpty() || jsonField.equals("[]")) {
             return;
@@ -190,8 +192,11 @@ public class ResumeAiRecommendService {
                     for (Object item : list) {
                         if (item instanceof String) {
                             sb.append("- ").append(item).append("\n");
+                        } else if (item instanceof java.util.Map) {
+                            // [FIX] Map을 읽기 좋은 텍스트로 변환
+                            String readableText = convertMapToReadableText((java.util.Map<String, Object>) item, title);
+                            sb.append("- ").append(readableText).append("\n");
                         } else {
-                            // Map이나 복잡한 객체는 toString()으로 변환
                             sb.append("- ").append(item.toString()).append("\n");
                         }
                     }
@@ -202,6 +207,63 @@ public class ResumeAiRecommendService {
             // JSON 파싱 실패 시 원본 문자열 사용
             log.warn("⚠️ JSON 파싱 실패, 원본 사용: {} - {}", title, e.getMessage());
             sb.append(title).append("\n").append(jsonField).append("\n\n");
+        }
+    }
+
+    /**
+     * [NEW] Map을 섹션 타입에 맞게 읽기 좋은 텍스트로 변환
+     */
+    private String convertMapToReadableText(java.util.Map<String, Object> map, String sectionTitle) {
+        StringBuilder result = new StringBuilder();
+
+        if (sectionTitle.contains("학력")) {
+            // 학력: 학교명, 전공, 기간
+            appendIfPresent(result, map, "school", "schoolName", "school_name", "학교명");
+            appendIfPresent(result, map, "major", "majorName", "department", "전공", "학과");
+            appendIfPresent(result, map, "degree", "degreeType", "학위");
+            appendIfPresent(result, map, "status", "graduationStatus", "졸업여부");
+            appendIfPresent(result, map, "period", "기간");
+        } else if (sectionTitle.contains("경력")) {
+            // 경력: 회사명, 직책, 역할, 기간, 업무내용
+            appendIfPresent(result, map, "company", "companyName", "company_name", "회사명");
+            appendIfPresent(result, map, "position", "직책", "직위");
+            appendIfPresent(result, map, "role", "역할", "담당업무");
+            appendIfPresent(result, map, "period", "기간", "근무기간");
+            appendIfPresent(result, map, "description", "업무내용", "주요업무", "key_tasks");
+        } else if (sectionTitle.contains("프로젝트") || sectionTitle.contains("경험")) {
+            // 프로젝트/경험: 제목, 기간, 설명
+            appendIfPresent(result, map, "title", "projectName", "project_title", "name", "프로젝트명");
+            appendIfPresent(result, map, "period", "기간");
+            appendIfPresent(result, map, "description", "desc", "details", "내용");
+        } else if (sectionTitle.contains("자격증") || sectionTitle.contains("어학")) {
+            // 자격증: 이름, 취득일, 발급기관
+            appendIfPresent(result, map, "title", "name", "자격증명");
+            appendIfPresent(result, map, "date", "취득일", "발급일");
+            appendIfPresent(result, map, "issuer", "발급기관", "기관");
+        } else {
+            // 기타: 모든 값을 순서대로 출력
+            for (Object value : map.values()) {
+                if (value != null && !value.toString().trim().isEmpty()) {
+                    if (result.length() > 0) result.append(" | ");
+                    result.append(value.toString().trim());
+                }
+            }
+        }
+
+        return result.length() > 0 ? result.toString() : map.toString();
+    }
+
+    /**
+     * [NEW] Map에서 여러 키 중 하나라도 있으면 값을 추가
+     */
+    private void appendIfPresent(StringBuilder sb, java.util.Map<String, Object> map, String... keys) {
+        for (String key : keys) {
+            Object value = map.get(key);
+            if (value != null && !value.toString().trim().isEmpty()) {
+                if (sb.length() > 0) sb.append(" | ");
+                sb.append(value.toString().trim());
+                return; // 첫 번째 매칭된 값만 사용
+            }
         }
     }
 

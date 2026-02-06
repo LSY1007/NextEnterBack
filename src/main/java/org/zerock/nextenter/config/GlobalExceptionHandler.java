@@ -17,10 +17,10 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    // ✅ ClientAbortException 핸들러 추가 - 클라이언트 연결 끊김 처리
+   // ✅ ClientAbortException 핸들러 추가 - 클라이언트 연결 끊김 처리
     @ExceptionHandler({ClientAbortException.class, AsyncRequestNotUsableException.class})
     public void handleClientAbortException(Exception e) {
-        // 클라이언트가 연결을 끊은 경우 로그만 남기고 응답하지 않음
+      //   클라이언트가 연결을 끊은 경우 로그만 남기고 응답하지 않음
         log.warn("⚠️ [Client Disconnected] {}: {}", e.getClass().getSimpleName(), e.getMessage());
     }
 

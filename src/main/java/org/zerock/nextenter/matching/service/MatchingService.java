@@ -58,6 +58,20 @@ public class MatchingService {
                 .collect(Collectors.toList());
     }
 
+    // ✅ 추가: 사용자별 전체 매칭 히스토리 조회
+    @Transactional(readOnly = true)
+    public List<MatchingHistoryDTO> getMatchingsByUserId(Long userId) {
+        log.info("사용자 매칭 히스토리 조회 - userId: {}", userId);
+
+        List<ResumeMatching> matchings = matchingRepository.findByUserId(userId);
+
+        log.info("사용자 매칭 히스토리 조회 완료 - userId: {}, 매칭 수: {}", userId, matchings.size());
+
+        return matchings.stream()
+                .map(this::convertToHistoryDto)
+                .collect(Collectors.toList());
+    }
+
     @Transactional(readOnly = true)
     public List<MatchingResultDTO> getMatchingsByJob(Long jobId) {
         List<ResumeMatching> matchings = matchingRepository.findByJobId(jobId);

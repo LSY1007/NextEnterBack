@@ -42,43 +42,32 @@ public class JobPostingService {
         Pageable pageable = PageRequest.of(page, size);
         Page<JobPosting> jobPage;
 
-        // 모든 필터가 비어있으면 전체 조회
-        if ((jobCategories == null || jobCategories.isEmpty()) &&
-            (regions == null || regions.isEmpty()) &&
-            (keyword == null || keyword.isEmpty()) &&
-            (status == null || status.isEmpty())) {
-            
-            jobPage = jobPostingRepository.findByStatusOrderByCreatedAtDesc(
-                    JobPosting.Status.ACTIVE, pageable);
-        } else {
-            // 문자열을 리스트로 변환
-            List<String> categoryList = (jobCategories != null && !jobCategories.isEmpty()) 
-                    ? Arrays.asList(jobCategories.split(",")) 
-                    : null;
-            
-            List<String> regionList = (regions != null && !regions.isEmpty()) 
-                    ? Arrays.asList(regions.split(",")) 
-                    : null;
-            
-            // status Enum 변환 (null이면 기본값 ACTIVE)
-            JobPosting.Status statusEnum = JobPosting.Status.ACTIVE; // 기본값
-            if (status != null && !status.isEmpty()) {
-                try {
-                    statusEnum = JobPosting.Status.valueOf(status.toUpperCase());
-                } catch (IllegalArgumentException e) {
-                    log.warn("유효하지 않은 status 값: {}", status);
-                    statusEnum = JobPosting.Status.ACTIVE;
-                }
+        // 문자열을 리스트로 변환
+        List<String> categoryList = (jobCategories != null && !jobCategories.isEmpty())
+                ? Arrays.asList(jobCategories.split(","))
+                : null;
+
+        List<String> regionList = (regions != null && !regions.isEmpty())
+                ? Arrays.asList(regions.split(","))
+                : null;
+
+        // status Enum 변환 (null이면 전체 상태 조회)
+        JobPosting.Status statusEnum = null;
+        if (status != null && !status.isEmpty()) {
+            try {
+                statusEnum = JobPosting.Status.valueOf(status.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                log.warn("유효하지 않은 status 값: {}", status);
             }
-            
-            // 필터 조건이 있으면 동적 검색 사용 (지역 LIKE 검색 포함)
-            jobPage = jobPostingRepository.searchByFiltersWithRegionLike(
-                    categoryList,
-                    regionList,
-                    keyword,
-                    statusEnum,
-                    pageable);
         }
+
+        // 동적 검색 (status null이면 전체 상태 조회)
+        jobPage = jobPostingRepository.searchByFiltersWithRegionLike(
+                categoryList,
+                regionList,
+                keyword,
+                statusEnum,
+                pageable);
 
         return jobPage.map(this::convertToListResponse);
     }

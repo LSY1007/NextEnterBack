@@ -36,6 +36,10 @@ public class AiRecommendResponse {
     @JsonProperty("ai_feedback")
     private String aiReport;
 
+    /** 주니어/시니어 평가 (백엔드에서 경력 연수 기반으로 설정) */
+    @JsonProperty("experience_level")
+    private String experienceLevel;
+
     @JsonProperty("recommendations")
     private List<CompanyRecommend> companies;
 
@@ -72,7 +76,15 @@ public class AiRecommendResponse {
         
         @JsonProperty("is_exact_match")
         private Boolean isExactMatch;
-        
+
+        /** 매칭된 공고 ID (백엔드에서 회사명→공고 매칭 후 설정) */
+        @JsonProperty("job_id")
+        private Long jobId;
+
+        /** 매칭된 공고 상태 (ACTIVE, CLOSED 등) */
+        @JsonProperty("job_status")
+        private String jobStatus;
+
         // 프론트 호환용 (필요시 사용)
         public String getRole() { return matchType; }
         public Double getScore() { return matchScore; }

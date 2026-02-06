@@ -49,6 +49,26 @@ public class MatchingController {
         }
     }
 
+    // ✅ 추가: 사용자별 전체 매칭 히스토리 조회
+    @Operation(summary = "사용자별 매칭 히스토리 조회")
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<Map<String, Object>> getMatchingsByUser(@PathVariable Long userId) {
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            List<MatchingHistoryDTO> matchings = matchingService.getMatchingsByUserId(userId);
+            response.put("success", true);
+            response.put("data", matchings);
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            log.error("사용자 매칭 히스토리 조회 오류", e);
+            response.put("success", false);
+            response.put("message", "서버 오류가 발생했습니다.");
+            return ResponseEntity.internalServerError().body(response);
+        }
+    }
+
     // 특정 이력서의 모든 매칭 히스토리 조회
     @Operation(summary = "모든 매칭 히스토리 조회")
     @GetMapping("/resume/{resumeId}")

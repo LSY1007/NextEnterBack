@@ -121,6 +121,15 @@ public class InterviewService {
                         log.info("🤖 [AI-REQUEST] portfolioFiles: {}", portfolioFiles);
                 }
                 log.info("🤖 [AI-REQUEST] resumeContent 키: {}", resumeContent.keySet());
+
+                // 5-2. 포트폴리오 텍스트 (프론트엔드 입력) → AI portfolio context 구성
+                Map<String, Object> portfolioMap = null;
+                if (request.getPortfolioText() != null && !request.getPortfolioText().isBlank()) {
+                        portfolioMap = new HashMap<>();
+                        portfolioMap.put("text", request.getPortfolioText());
+                        log.info("🤖 [AI-REQUEST] portfolioText: {}", request.getPortfolioText());
+                }
+
                 log.info("========================================");
 
                 // 6. AI에게 첫 질문 요청
@@ -129,6 +138,7 @@ public class InterviewService {
                                 .targetRole(normalizedJobCategory) // Normalized
                                 .resumeContent(resumeContent)
                                 .lastAnswer(null) // 첫 질문이므로 null
+                                .portfolio(portfolioMap) // ✅ 포트폴리오 텍스트 전달
                                 .portfolioFiles(portfolioFiles)
                                 .totalTurns(interview.getTotalTurns()) // ✅ 횟수 정보 추가
                                 .difficulty(interview.getDifficulty().name()) // ✅ 난이도 전달

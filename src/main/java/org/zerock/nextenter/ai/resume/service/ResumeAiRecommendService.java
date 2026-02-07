@@ -547,7 +547,7 @@ public class ResumeAiRecommendService {
         return null;
     }
 
-    /** period 문자열에서 개월 수 추출: "2022.01 - 현재 (4년)" → 48, "2019.05 - 2021.12 (36개월)" → 36 */
+    /** period 문자열에서 개월 수 추출: "2022.01 - 현재 (4년)" → 48, "2022-01-15 ~ 2024-06-30" → 30 */
     private double parseMonthsFromPeriod(String period) {
         // 괄호 안의 숫자+년/개월 패턴 우선
         java.util.regex.Matcher ym = java.util.regex.Pattern.compile("\\((\\d+)년\\)").matcher(period);
@@ -556,7 +556,15 @@ public class ResumeAiRecommendService {
         java.util.regex.Matcher mm = java.util.regex.Pattern.compile("\\((\\d+)개월\\)").matcher(period);
         if (mm.find()) return Double.parseDouble(mm.group(1));
 
-        // 괄호 없으면 날짜 범위로 계산
+        // ~ 구분자 우선 시도 (프론트엔드 ISO 날짜: "2022-01-15 ~ 2024-06-30")
+        if (period.contains("~")) {
+            String[] parts = period.split("\\s*~\\s*");
+            if (parts.length == 2) {
+                return calculateMonthsBetween(parts[0].trim(), parts[1].trim());
+            }
+        }
+
+        // - 구분자 (DB 직접 입력: "2022.01 - 현재")
         String[] parts = period.split("\\s*-\\s*");
         if (parts.length == 2) {
             return calculateMonthsBetween(parts[0].trim(), parts[1].trim());

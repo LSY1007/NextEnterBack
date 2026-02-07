@@ -30,4 +30,7 @@ public class InterviewStartRequest {
 
     @Schema(description = "총 턴 수 (기본값: 5)", example = "5")
     private Integer totalTurns;
+
+    @Schema(description = "포트폴리오 텍스트 (선택)", example = "GitHub: https://github.com/user, 프로젝트: AI 챗봇 개발")
+    private String portfolioText;
 }

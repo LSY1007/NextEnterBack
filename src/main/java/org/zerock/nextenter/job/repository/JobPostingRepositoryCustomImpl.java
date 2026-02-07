@@ -59,9 +59,11 @@ public class JobPostingRepositoryCustomImpl implements JobPostingRepositoryCusto
             countJpql.append("AND (j.title LIKE :keyword OR j.description LIKE :keyword) ");
         }
 
-        // 상태 필터
-        jpql.append("AND j.status = :status ");
-        countJpql.append("AND j.status = :status ");
+        // 상태 필터 (null이면 전체 상태 조회)
+        if (statusEnum != null) {
+            jpql.append("AND j.status = :status ");
+            countJpql.append("AND j.status = :status ");
+        }
 
         // 정렬
         jpql.append("ORDER BY j.createdAt DESC");
@@ -94,8 +96,10 @@ public class JobPostingRepositoryCustomImpl implements JobPostingRepositoryCusto
             countQuery.setParameter("keyword", keywordParam);
         }
 
-        query.setParameter("status", statusEnum);
-        countQuery.setParameter("status", statusEnum);
+        if (statusEnum != null) {
+            query.setParameter("status", statusEnum);
+            countQuery.setParameter("status", statusEnum);
+        }
 
         // 페이징 적용
         query.setFirstResult((int) pageable.getOffset());

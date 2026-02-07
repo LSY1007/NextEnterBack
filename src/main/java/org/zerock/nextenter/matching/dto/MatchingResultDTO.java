@@ -15,7 +15,10 @@ public class MatchingResultDTO {
 
     private Long matchingId;
     private Long resumeId;
+    private Long userId;
     private Long jobId;
+    private String companyName;
+    private Double score;
     private String grade;
     private String missingSkills;
     private String cons;

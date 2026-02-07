@@ -11,6 +11,12 @@ import org.zerock.nextenter.ai.resume.dto.AiRecommendRequest;
 import org.zerock.nextenter.ai.resume.dto.AiRecommendResponse;
 import org.zerock.nextenter.ai.resume.entity.ResumeAiRecommend;
 import org.zerock.nextenter.ai.resume.repository.ResumeAiRecommendRepository;
+import org.zerock.nextenter.company.entity.Company;
+import org.zerock.nextenter.company.repository.CompanyRepository;
+import org.zerock.nextenter.job.entity.JobPosting;
+import org.zerock.nextenter.job.repository.JobPostingRepository;
+import org.zerock.nextenter.matching.entity.ResumeMatching;
+import org.zerock.nextenter.matching.service.MatchingService;
 import org.zerock.nextenter.resume.entity.Resume;
 import org.zerock.nextenter.resume.repository.ResumeRepository;
 
@@ -26,7 +32,10 @@ public class ResumeAiRecommendService {
 
     private final ResumeAiService resumeAiService;
     private final ResumeAiRecommendRepository recommendRepository;
+    private final MatchingService matchingService;
     private final ResumeRepository resumeRepository;
+    private final CompanyRepository companyRepository;
+    private final JobPostingRepository jobPostingRepository;
     private final ObjectMapper objectMapper;
 
     @Transactional
@@ -42,11 +51,29 @@ public class ResumeAiRecommendService {
         // 2. 응답에 유저 정보 보강
         responseDto.setUserId(request.getUserId());
 
-        // 3. DB 저장
+        // 2-1. 경력 기반 주니어/시니어 판별 후 응답에 설정
+        ResumeMatching.ExperienceLevel expLevel = calculateExperienceLevel(request.getResumeId());
+        responseDto.setExperienceLevel(expLevel.name());
+
+        // 2-2. 추천 기업별 job_id + job_status 매칭 (회사명 → company → 경력레벨에 맞는 공고)
+        if (responseDto.getCompanies() != null) {
+            for (AiRecommendResponse.CompanyRecommend company : responseDto.getCompanies()) {
+                matchJobForCompany(company, expLevel);
+            }
+        }
+
+        // 3. resume_ai_recommend 테이블 저장
         try {
             saveToDatabase(request, responseDto);
         } catch (Exception e) {
-            log.error("⚠️ [DB Error] 저장 실패: {}", e.getMessage());
+            log.error("⚠️ [DB Error] AI 추천 저장 실패: {}", e.getMessage());
+        }
+
+        // 4. resume_matching 테이블 저장 (추천 기업별 매칭 기록)
+        try {
+            saveToMatchingTable(request, responseDto);
+        } catch (Exception e) {
+            log.error("⚠️ [DB Error] 매칭 테이블 저장 실패: {}", e.getMessage());
         }
 
         return responseDto;
@@ -300,6 +327,296 @@ public class ResumeAiRecommendService {
 
         responseDto.setRecommendId(saved.getRecommendId());
         responseDto.setCreatedAt(saved.getCreatedAt());
+    }
+
+    /**
+     * AI 추천 결과를 resume_matching 테이블에 기업별로 저장한다.
+     * match_level → grade 매핑: BEST→S, HIGH→A, GAP→B
+     */
+    private void saveToMatchingTable(AiRecommendRequest request, AiRecommendResponse responseDto) {
+        List<AiRecommendResponse.CompanyRecommend> companies = responseDto.getCompanies();
+        if (companies == null || companies.isEmpty()) {
+            log.warn("추천 기업이 없어 매칭 테이블 저장 생략");
+            return;
+        }
+
+        String overallGradeStr = responseDto.getGrade();
+        String aiReport = responseDto.getAiReport();
+        int savedCount = 0;
+
+        // 이력서 종합 등급 파싱
+        ResumeMatching.Grade resumeGrade = null;
+        if (overallGradeStr != null) {
+            try {
+                resumeGrade = ResumeMatching.Grade.valueOf(overallGradeStr.toUpperCase());
+            } catch (IllegalArgumentException ignored) {}
+        }
+
+        // 경력 연수 기반 주니어/시니어 판별 (3년 이상 시니어, 미만 주니어)
+        ResumeMatching.ExperienceLevel expLevel = calculateExperienceLevel(request.getResumeId());
+
+        for (AiRecommendResponse.CompanyRecommend company : companies) {
+            try {
+                ResumeMatching.Grade grade = mapMatchLevelToGrade(company.getMatchLevel(), overallGradeStr);
+
+                String missingSkills = (company.getMissingSkills() != null && !company.getMissingSkills().isEmpty())
+                        ? String.join(", ", company.getMissingSkills())
+                        : null;
+
+                // 이미 2-2 단계에서 매칭된 job_id, job_status 사용
+                Long matchedJobId = company.getJobId() != null ? company.getJobId() : 0L;
+                String matchedJobStatus = company.getJobStatus();
+
+                ResumeMatching matching = ResumeMatching.builder()
+                        .resumeId(request.getResumeId())
+                        .userId(request.getUserId())
+                        .jobId(matchedJobId)
+                        .jobStatus(matchedJobStatus)
+                        .companyName(company.getCompanyName())
+                        .score(company.getMatchScore())
+                        .grade(grade)
+                        .resumeGrade(resumeGrade)
+                        .experienceLevel(expLevel)
+                        .missingSkills(missingSkills)
+                        .feedback(aiReport)
+                        .pros(company.getMatchLevel())
+                        .cons(missingSkills)
+                        .matchingType(ResumeMatching.MatchingType.AI_RECOMMEND)
+                        .build();
+
+                // 독립 트랜잭션으로 저장 (실패해도 AI 추천 응답에 영향 없음)
+                matchingService.saveMatchingInNewTransaction(matching);
+                savedCount++;
+            } catch (Exception e) {
+                log.warn("매칭 개별 저장 실패 (company: {}): {}", company.getCompanyName(), e.getMessage());
+            }
+        }
+
+        log.info("매칭 테이블 저장 완료: resumeId={}, 성공={}/전체={}", request.getResumeId(), savedCount, companies.size());
+    }
+
+    /**
+     * AI 추천 회사명으로 DB에서 company → job_posting을 찾아 jobId + jobStatus를 설정한다.
+     * 시니어는 [경력] 공고, 주니어는 [신입] 공고 우선.
+     * 해당 레벨 공고가 CLOSED이면 jobId + "CLOSED" 반환 (주니어 fallback 안 함).
+     * 해당 레벨 공고 자체가 없으면 다른 ACTIVE 공고로 fallback.
+     */
+    private void matchJobForCompany(AiRecommendResponse.CompanyRecommend company, ResumeMatching.ExperienceLevel expLevel) {
+        String companyName = company.getCompanyName();
+        if (companyName == null || companyName.trim().isEmpty()) {
+            company.setJobId(0L);
+            company.setJobStatus(null);
+            return;
+        }
+
+        try {
+            // 1. 정확히 일치하는 회사 검색
+            Company dbCompany = companyRepository.findByCompanyName(companyName).orElse(null);
+
+            // 2. 없으면 한글 이름(괄호 앞부분)으로 LIKE 검색
+            if (dbCompany == null) {
+                String koreanName = companyName.split("[\\(（]")[0].trim();
+                List<Company> candidates = companyRepository.findByCompanyNameContaining(koreanName);
+                if (!candidates.isEmpty()) {
+                    dbCompany = candidates.get(0);
+                }
+            }
+
+            if (dbCompany == null) {
+                log.debug("회사 매칭 실패: {}", companyName);
+                company.setJobId(0L);
+                company.setJobStatus(null);
+                return;
+            }
+
+            // 3. 해당 회사의 전체 공고 (ACTIVE + CLOSED 모두)
+            List<JobPosting> allJobs = jobPostingRepository
+                    .findByCompanyIdOrderByCreatedAtDesc(dbCompany.getCompanyId());
+
+            if (allJobs.isEmpty()) {
+                log.debug("공고 없음: {} (companyId={})", companyName, dbCompany.getCompanyId());
+                company.setJobId(0L);
+                company.setJobStatus(null);
+                return;
+            }
+
+            String preferKeyword = (expLevel == ResumeMatching.ExperienceLevel.SENIOR) ? "경력" : "신입";
+
+            // 4-1. 우선 키워드 ACTIVE 공고
+            for (JobPosting job : allJobs) {
+                if (job.getStatus() == JobPosting.Status.ACTIVE
+                        && job.getTitle() != null && job.getTitle().contains(preferKeyword)) {
+                    log.info("회사-공고 매칭 (ACTIVE {}): {} → jobId={}", preferKeyword, companyName, job.getJobId());
+                    company.setJobId(job.getJobId());
+                    company.setJobStatus("ACTIVE");
+                    return;
+                }
+            }
+
+            // 4-2. 우선 키워드 CLOSED 공고 → 마감 상태로 반환 (다른 레벨로 fallback 안 함)
+            for (JobPosting job : allJobs) {
+                if (job.getStatus() != JobPosting.Status.ACTIVE
+                        && job.getTitle() != null && job.getTitle().contains(preferKeyword)) {
+                    log.info("회사-공고 매칭 (CLOSED {}): {} → jobId={}", preferKeyword, companyName, job.getJobId());
+                    company.setJobId(job.getJobId());
+                    company.setJobStatus("CLOSED");
+                    return;
+                }
+            }
+
+            // 4-3. 우선 키워드 공고 자체가 없으면 → 아무 ACTIVE 공고
+            for (JobPosting job : allJobs) {
+                if (job.getStatus() == JobPosting.Status.ACTIVE) {
+                    log.info("회사-공고 매칭 (기본 ACTIVE): {} → jobId={}", companyName, job.getJobId());
+                    company.setJobId(job.getJobId());
+                    company.setJobStatus("ACTIVE");
+                    return;
+                }
+            }
+
+            // 5. ACTIVE 공고 없음 → 0
+            log.debug("ACTIVE 공고 없음: {} (companyId={})", companyName, dbCompany.getCompanyId());
+            company.setJobId(0L);
+            company.setJobStatus(null);
+
+        } catch (Exception e) {
+            log.warn("회사-공고 매칭 오류 ({}): {}", companyName, e.getMessage());
+            company.setJobId(0L);
+            company.setJobStatus(null);
+        }
+    }
+
+    /**
+     * 이력서의 경력 데이터에서 총 경력 연수를 계산하여 주니어/시니어를 판별한다.
+     * 3년 이상: SENIOR, 미만: JUNIOR
+     */
+    @SuppressWarnings("unchecked")
+    private ResumeMatching.ExperienceLevel calculateExperienceLevel(Long resumeId) {
+        try {
+            Resume resume = resumeRepository.findById(resumeId).orElse(null);
+            if (resume == null || resume.getCareers() == null || resume.getCareers().trim().isEmpty()
+                    || resume.getCareers().equals("[]")) {
+                log.info("경력 데이터 없음 → JUNIOR (resumeId={})", resumeId);
+                return ResumeMatching.ExperienceLevel.JUNIOR;
+            }
+
+            List<?> careerList = objectMapper.readValue(resume.getCareers(), List.class);
+            double totalMonths = 0;
+
+            for (Object item : careerList) {
+                if (!(item instanceof java.util.Map)) continue;
+                java.util.Map<String, Object> career = (java.util.Map<String, Object>) item;
+
+                // 형식1: period 필드 ("2022.01 - 현재 (4년)" 또는 "2019.05 - 2021.12 (36개월)")
+                String period = getStringValue(career, "period");
+                if (period != null) {
+                    totalMonths += parseMonthsFromPeriod(period);
+                    continue;
+                }
+
+                // 형식2: start_date / end_date 필드
+                String startDate = getStringValue(career, "start_date", "startDate");
+                String endDate = getStringValue(career, "end_date", "endDate");
+                if (startDate != null) {
+                    totalMonths += calculateMonthsBetween(startDate, endDate);
+                }
+            }
+
+            double totalYears = totalMonths / 12.0;
+            ResumeMatching.ExperienceLevel level = totalYears >= 3.0
+                    ? ResumeMatching.ExperienceLevel.SENIOR
+                    : ResumeMatching.ExperienceLevel.JUNIOR;
+
+            log.info("경력 판별: resumeId={}, 총 {}개월 (약 {}년) → {}",
+                    resumeId, (int) totalMonths, String.format("%.1f", totalYears), level);
+            return level;
+
+        } catch (Exception e) {
+            log.warn("경력 연수 계산 실패 → JUNIOR (resumeId={}): {}", resumeId, e.getMessage());
+            return ResumeMatching.ExperienceLevel.JUNIOR;
+        }
+    }
+
+    private String getStringValue(java.util.Map<String, Object> map, String... keys) {
+        for (String key : keys) {
+            Object val = map.get(key);
+            if (val != null && !val.toString().trim().isEmpty()) {
+                return val.toString().trim();
+            }
+        }
+        return null;
+    }
+
+    /** period 문자열에서 개월 수 추출: "2022.01 - 현재 (4년)" → 48, "2022-01-15 ~ 2024-06-30" → 30 */
+    private double parseMonthsFromPeriod(String period) {
+        // 괄호 안의 숫자+년/개월 패턴 우선
+        java.util.regex.Matcher ym = java.util.regex.Pattern.compile("\\((\\d+)년\\)").matcher(period);
+        if (ym.find()) return Double.parseDouble(ym.group(1)) * 12;
+
+        java.util.regex.Matcher mm = java.util.regex.Pattern.compile("\\((\\d+)개월\\)").matcher(period);
+        if (mm.find()) return Double.parseDouble(mm.group(1));
+
+        // ~ 구분자 우선 시도 (프론트엔드 ISO 날짜: "2022-01-15 ~ 2024-06-30")
+        if (period.contains("~")) {
+            String[] parts = period.split("\\s*~\\s*");
+            if (parts.length == 2) {
+                return calculateMonthsBetween(parts[0].trim(), parts[1].trim());
+            }
+        }
+
+        // - 구분자 (DB 직접 입력: "2022.01 - 현재")
+        String[] parts = period.split("\\s*-\\s*");
+        if (parts.length == 2) {
+            return calculateMonthsBetween(parts[0].trim(), parts[1].trim());
+        }
+        return 0;
+    }
+
+    /** 두 날짜 문자열 사이의 개월 수 계산 */
+    private double calculateMonthsBetween(String startStr, String endStr) {
+        try {
+            int[] start = parseYearMonth(startStr);
+            int[] end;
+            if (endStr == null || endStr.contains("현재") || endStr.contains("재직")) {
+                java.time.LocalDate now = java.time.LocalDate.now();
+                end = new int[]{now.getYear(), now.getMonthValue()};
+            } else {
+                end = parseYearMonth(endStr);
+            }
+
+            if (start == null || end == null) return 0;
+            return (end[0] - start[0]) * 12.0 + (end[1] - start[1]);
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    /** "2022.01", "2022-01", "2022/01" → [2022, 1] */
+    private int[] parseYearMonth(String dateStr) {
+        if (dateStr == null) return null;
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\d{4})[.\\-/](\\d{1,2})").matcher(dateStr);
+        if (m.find()) {
+            return new int[]{Integer.parseInt(m.group(1)), Integer.parseInt(m.group(2))};
+        }
+        return null;
+    }
+
+    private ResumeMatching.Grade mapMatchLevelToGrade(String matchLevel, String overallGrade) {
+        // 1. match_level 기반 매핑
+        if (matchLevel != null) {
+            switch (matchLevel.toUpperCase()) {
+                case "BEST": return ResumeMatching.Grade.S;
+                case "HIGH": return ResumeMatching.Grade.A;
+                case "GAP": return ResumeMatching.Grade.B;
+            }
+        }
+        // 2. AI 전체 등급 fallback
+        if (overallGrade != null) {
+            try {
+                return ResumeMatching.Grade.valueOf(overallGrade.toUpperCase());
+            } catch (IllegalArgumentException ignored) {}
+        }
+        return ResumeMatching.Grade.B;
     }
 
     @Transactional(readOnly = true)

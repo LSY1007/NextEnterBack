@@ -1,3 +1,359 @@
+# NextEnter 시스템 아키텍처
+
+## 전체 구조도
+```mermaid
+graph TB
+    subgraph "클라이언트"
+        A[사용자<br/>Browser]
+    end
+    
+    subgraph "Frontend Layer"
+        B[Frontend<br/>React + TypeScript<br/>Port: 5173]
+        B1[Redux Toolkit<br/>상태관리]
+        B2[Axios<br/>HTTP 클라이언트]
+        B3[React Router<br/>라우팅]
+        B4[WebSocket<br/>실시간 알림]
+    end
+    
+    subgraph "Backend Layer"
+        C[Backend<br/>Spring Boot + Java 21<br/>Port: 8080]
+        C1[Spring Security + JWT<br/>인증/인가]
+        C2[Spring Data JPA<br/>ORM]
+        C3[OAuth2 Client<br/>소셜 로그인]
+        C4[WebSocket<br/>알림 서버]
+    end
+    
+    subgraph "AI Layer"
+        D[AI Server<br/>FastAPI + Python<br/>Port: 8000]
+        D1[Resume Engine<br/>이력서 분석]
+        D2[Interview Engine<br/>모의 면접]
+        D3[Google Gemini API<br/>생성형 AI]
+    end
+    
+    subgraph "Data Layer"
+        E[(MySQL DB<br/>Port: 3306)]
+        F[File Storage<br/>이미지/문서]
+    end
+    
+    A -->|HTTPS| B
+    B --> B1
+    B --> B2
+    B --> B3
+    B --> B4
+    
+    B -->|REST API| C
+    B4 -.->|WebSocket| C4
+    
+    C --> C1
+    C --> C2
+    C --> C3
+    C --> C4
+    
+    C -->|REST API| D
+    
+    D --> D1
+    D --> D2
+    D --> D3
+    
+    C -->|JPA/JDBC| E
+    C -->|File I/O| F
+    
+    style A fill:#e1f5ff
+    style B fill:#fff4e1
+    style C fill:#e8f5e9
+    style D fill:#f3e5f5
+    style E fill:#ffebee
+    style F fill:#fff3e0
+```
+
+## 상세 데이터 흐름
+
+### 1. 사용자 인증 흐름
+```mermaid
+sequenceDiagram
+    participant U as 사용자
+    participant F as Frontend
+    participant B as Backend
+    participant DB as MySQL
+    participant OAuth as OAuth Provider
+    
+    alt 일반 로그인
+        U->>F: 로그인 요청
+        F->>B: POST /api/auth/login
+        B->>DB: 사용자 조회
+        DB-->>B: 사용자 정보
+        B->>B: JWT 토큰 생성
+        B-->>F: Access Token + User Info
+        F-->>U: 로그인 성공
+    else 소셜 로그인
+        U->>F: 소셜 로그인 선택
+        F->>OAuth: OAuth 인증 요청
+        OAuth-->>F: Authorization Code
+        F->>B: POST /login/oauth2/code/{provider}
+        B->>OAuth: Access Token 요청
+        OAuth-->>B: Access Token
+        B->>OAuth: 사용자 정보 요청
+        OAuth-->>B: 사용자 프로필
+        B->>DB: 사용자 저장/조회
+        B->>B: JWT 토큰 생성
+        B-->>F: Access Token + User Info
+        F-->>U: 로그인 성공
+    end
+```
+
+### 2. AI 이력서 분석 흐름
+```mermaid
+sequenceDiagram
+    participant U as 사용자
+    participant F as Frontend
+    participant B as Backend
+    participant AI as AI Server
+    participant G as Gemini API
+    participant DB as MySQL
+    
+    U->>F: 이력서 분석 요청
+    F->>B: POST /api/matching/analyze
+    B->>B: 이력서 파일 파싱
+    B->>AI: POST /api/v1/analyze
+    
+    AI->>AI: 텍스트 전처리
+    AI->>AI: 임베딩 생성
+    
+    AI->>G: 직무 분류 요청
+    G-->>AI: Classification Result
+    
+    AI->>G: 등급 평가 요청
+    G-->>AI: Evaluation Result
+    
+    AI->>AI: 벡터 유사도 계산
+    AI->>AI: 기업 매칭
+    
+    AI->>G: AI 피드백 생성
+    G-->>AI: Feedback Text
+    
+    AI-->>B: 분석 결과 반환
+    B->>DB: 매칭 결과 저장
+    B-->>F: 분석 결과 + 추천 기업
+    F-->>U: 결과 화면 표시
+```
+
+### 3. AI 모의면접 흐름
+```mermaid
+sequenceDiagram
+    participant U as 사용자
+    participant F as Frontend
+    participant B as Backend
+    participant AI as AI Server
+    participant G as Gemini API
+    participant DB as MySQL
+    
+    U->>F: 면접 시작
+    F->>B: POST /api/interview/start
+    B->>AI: POST /api/v1/interview/next
+    
+    AI->>G: 첫 질문 생성
+    G-->>AI: Question 1
+    AI-->>B: 질문 반환
+    B->>DB: 면접 세션 저장
+    B-->>F: 첫 질문
+    F-->>U: 질문 표시
+    
+    loop 면접 진행 (5회)
+        U->>F: 답변 입력
+        F->>B: POST /api/interview/next
+        B->>AI: POST /api/v1/interview/next
+        
+        AI->>G: 답변 분석 + 다음 질문
+        G-->>AI: Feedback + Next Question
+        
+        AI-->>B: 질문 + 실시간 피드백
+        B->>DB: 대화 저장
+        B-->>F: 다음 질문
+        F-->>U: 질문 표시
+    end
+    
+    U->>F: 면접 종료
+    F->>B: POST /api/interview/complete
+    B->>AI: POST /api/v1/interview/complete
+    
+    AI->>G: 종합 평가 요청
+    G-->>AI: Final Report
+    
+    AI-->>B: 최종 평가
+    B->>DB: 결과 저장
+    B-->>F: 평가 리포트
+    F-->>U: 결과 화면 표시
+```
+
+### 4. 실시간 알림 흐름
+```mermaid
+sequenceDiagram
+    participant U as 사용자
+    participant F as Frontend
+    participant WS as WebSocket Server
+    participant B as Backend
+    participant DB as MySQL
+    
+    U->>F: 로그인
+    F->>WS: WebSocket 연결
+    WS-->>F: 연결 성공
+    
+    Note over F,WS: 구독: /topic/notifications/{userId}
+    
+    B->>B: 이벤트 발생<br/>(지원 상태 변경)
+    B->>DB: 알림 저장
+    B->>WS: 알림 발송
+    WS-->>F: 알림 메시지
+    F->>F: 브라우저 알림 표시
+    F-->>U: 알림 팝업
+    
+    U->>F: 알림 클릭
+    F->>B: PUT /api/notifications/{id}/read
+    B->>DB: 읽음 처리
+    B-->>F: 성공
+```
+
+### 5. 채용공고 지원 흐름
+```mermaid
+sequenceDiagram
+    participant U as 사용자
+    participant F as Frontend
+    participant B as Backend
+    participant DB as MySQL
+    participant WS as WebSocket
+    
+    U->>F: 지원하기 클릭
+    F->>B: POST /api/apply
+    B->>DB: 지원 내역 저장
+    B->>DB: 알림 생성
+    B->>WS: 알림 전송 (기업회원)
+    B-->>F: 지원 완료
+    F-->>U: 지원 완료 메시지
+    
+    Note over B,WS: 기업회원에게 알림 전송
+    
+    U->>F: 지원 현황 조회
+    F->>B: GET /api/apply
+    B->>DB: 지원 목록 조회
+    DB-->>B: 지원 내역
+    B-->>F: 지원 목록
+    F-->>U: 지원 현황 표시
+```
+
+## 기술 스택 매핑
+```mermaid
+graph LR
+    subgraph "Frontend Stack"
+        A1[React 19.2.0]
+        A2[TypeScript 5.9.3]
+        A3[Vite 7.2.4]
+        A4[Zustand 5.0.9]
+        A5[Tailwind CSS 3.4.19]
+        A6[Axios 1.13.2]
+        A7[React Router 7.12.0]
+    end
+    
+    subgraph "Backend Stack"
+        B1[Spring Boot 3.5.6]
+        B2[Java 21]
+        B3[Spring Security]
+        B4[Spring Data JPA]
+        B5[JWT JJWT 0.12.3]
+        B6[MySQL Connector]
+        B7[Apache POI 5.2.5]
+        B8[Apache PDFBox 3.0.3]
+    end
+    
+    subgraph "AI Stack"
+        C1[FastAPI]
+        C2[Python 3.10+]
+        C3[Google Gemini API]
+        C4[Sentence Transformers]
+        C5[scikit-learn]
+        C6[pypdf]
+        C7[python-docx]
+    end
+    
+    subgraph "Database"
+        D1[(MySQL 8.x)]
+    end
+    
+    style A1 fill:#61dafb
+    style B1 fill:#6db33f
+    style C1 fill:#009688
+    style D1 fill:#00758f
+```
+
+## 배포 아키텍처 (프로덕션)
+```mermaid
+graph TB
+    subgraph "Load Balancer"
+        LB[Nginx/AWS ALB]
+    end
+    
+    subgraph "Frontend Servers"
+        F1[React App 1]
+        F2[React App 2]
+    end
+    
+    subgraph "Backend Servers"
+        B1[Spring Boot 1]
+        B2[Spring Boot 2]
+        B3[Spring Boot 3]
+    end
+    
+    subgraph "AI Servers"
+        A1[FastAPI 1]
+        A2[FastAPI 2]
+    end
+    
+    subgraph "Database Cluster"
+        DB1[(MySQL Master)]
+        DB2[(MySQL Slave 1)]
+        DB3[(MySQL Slave 2)]
+    end
+    
+    subgraph "Storage"
+        S1[AWS S3/<br/>File Storage]
+    end
+    
+    subgraph "Cache"
+        R1[Redis Cluster]
+    end
+    
+    LB --> F1
+    LB --> F2
+    LB --> B1
+    LB --> B2
+    LB --> B3
+    
+    B1 --> A1
+    B2 --> A1
+    B3 --> A2
+    B1 --> A2
+    B2 --> A2
+    
+    B1 --> DB1
+    B2 --> DB1
+    B3 --> DB1
+    
+    DB1 -.->|Replication| DB2
+    DB1 -.->|Replication| DB3
+    
+    B1 --> R1
+    B2 --> R1
+    B3 --> R1
+    
+    B1 --> S1
+    B2 --> S1
+    B3 --> S1
+    
+    style LB fill:#ff9800
+    style DB1 fill:#e53935
+    style R1 fill:#d32f2f
+    style S1 fill:#ffa726
+```
+
 # NextEnter Backend
 
 > 구직자와 기업을 AI로 매칭하는 채용 플랫폼 백엔드 시스템

@@ -773,7 +773,7 @@ docs: API 문서 업데이트
 ## 👥 개발자 정보
 
 - **개발자**: 이상연
-- **GitHub**: https://github.com/yourusername/NextEnterBack
+- **GitHub**: https://github.com/LSY1007/NextEnterBack.git
 - **이메일**: dltkddus50@naver.com
 
 ## 📞 문의

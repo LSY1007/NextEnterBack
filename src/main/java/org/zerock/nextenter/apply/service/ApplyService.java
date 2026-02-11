@@ -456,4 +456,31 @@ public class ApplyService {
             return List.of();
         }
     }
+
+    /**
+     * 지원자 일괄 삭제 (기업용)
+     */
+    @Transactional
+    public void deleteApplies(Long companyId, List<Long> applyIds) {
+        log.info("▶ [ApplyService] 지원자 일괄 삭제 시작 - companyId: {}, count: {}", companyId, applyIds.size());
+
+        for (Long applyId : applyIds) {
+            Apply apply = applyRepository.findById(applyId)
+                    .orElseThrow(() -> new IllegalArgumentException("지원 정보를 찾을 수 없습니다"));
+
+            // 해당 공고가 이 기업의 것인지 확인
+            JobPosting job = jobPostingRepository.findById(apply.getJobId())
+                    .orElseThrow(() -> new IllegalArgumentException("공고를 찾을 수 없습니다"));
+
+            if (!job.getCompanyId().equals(companyId)) {
+                throw new IllegalArgumentException("권한이 없습니다");
+            }
+
+            // 실제 삭제
+            applyRepository.delete(apply);
+            log.info("✅ 지원자 삭제 완료 - applyId: {}", applyId);
+        }
+
+        log.info("✅ 지원자 일괄 삭제 완료 - 총 {}명 삭제", applyIds.size());
+    }
 }

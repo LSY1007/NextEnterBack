@@ -10,11 +10,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.zerock.nextenter.apply.dto.ApplyListResponse;
-import org.zerock.nextenter.apply.dto.ApplyRequest;
-import org.zerock.nextenter.apply.dto.ApplyResponse;
-import org.zerock.nextenter.apply.dto.ApplyStatusUpdateRequest;
+import org.zerock.nextenter.apply.dto.*;
 import org.zerock.nextenter.apply.service.ApplyService;
+import org.zerock.nextenter.apply.dto.DeleteAppliesRequest;
 
 import java.util.List;
 
@@ -187,5 +185,22 @@ public class ApplyController {
         log.info("PATCH /api/applies/{}/cancel - userId: {}", applyId, userId);
         applyService.cancelApply(userId, applyId);
         return ResponseEntity.ok().build();
+    }
+
+    // ✅ [신규] 지원자 일괄 삭제 API
+    @Operation(summary = "지원자 삭제", description = "기업이 지원자를 일괄 삭제합니다")
+    @DeleteMapping
+    public ResponseEntity<Void> deleteApplies(
+            @Parameter(description = "기업 ID", required = true)
+            @RequestHeader("companyId") Long companyId,
+
+            @Parameter(description = "삭제할 지원 ID 목록", required = true)
+            @RequestBody DeleteAppliesRequest request
+    ) {
+        log.info("DELETE /api/applies - companyId: {}, applyIds: {}", companyId, request.getApplyIds());
+
+        applyService.deleteApplies(companyId, request.getApplyIds());
+
+        return ResponseEntity.noContent().build();
     }
 }

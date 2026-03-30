@@ -2,6 +2,8 @@ package org.zerock.nextenter.job.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -31,18 +33,18 @@ public class JobPostingService {
     private final org.zerock.nextenter.company.repository.CompanyRepository companyRepository;
 
     /**
-     * 공고 목록 조회 (필터링 + 검색 + 페이징)
+     * 공고 목록 조회 (필터링 + 검색 + 페이징) - Redis 캐싱 적용
      */
+    @Cacheable(value = "jobList", key = "#jobCategories + '_' + #regions + '_' + #keyword + '_' + #status + '_' + #page + '_' + #size")
     public Page<JobPostingListResponse> getJobPostingList(
             String jobCategories, String regions, String keyword, String status, int page, int size) {
 
-        log.info("공고 목록 조회 - jobCategories: {}, regions: {}, keyword: {}, status: {}, page: {}", 
+        log.info("[CACHE MISS] 공고 목록 DB 조회 - jobCategories: {}, regions: {}, keyword: {}, status: {}, page: {}",
                 jobCategories, regions, keyword, status, page);
 
         Pageable pageable = PageRequest.of(page, size);
         Page<JobPosting> jobPage;
 
-        // 문자열을 리스트로 변환
         List<String> categoryList = (jobCategories != null && !jobCategories.isEmpty())
                 ? Arrays.asList(jobCategories.split(","))
                 : null;
@@ -51,7 +53,6 @@ public class JobPostingService {
                 ? Arrays.asList(regions.split(","))
                 : null;
 
-        // status Enum 변환 (null이면 전체 상태 조회)
         JobPosting.Status statusEnum = null;
         if (status != null && !status.isEmpty()) {
             try {
@@ -61,7 +62,6 @@ public class JobPostingService {
             }
         }
 
-        // 동적 검색 (status null이면 전체 상태 조회)
         jobPage = jobPostingRepository.searchByFiltersWithRegionLike(
                 categoryList,
                 regionList,
@@ -73,25 +73,26 @@ public class JobPostingService {
     }
 
     /**
-     * 공고 상세 조회
+     * 공고 상세 조회 - Redis 캐싱 적용
      */
+    @Cacheable(value = "jobDetail", key = "#jobId")
     @Transactional
     public JobPostingResponse getJobPostingDetail(Long jobId) {
-        log.info("공고 상세 조회 - jobId: {}", jobId);
+        log.info("[CACHE MISS] 공고 상세 DB 조회 - jobId: {}", jobId);
 
         JobPosting jobPosting = jobPostingRepository.findById(jobId)
                 .orElseThrow(() -> new IllegalArgumentException("공고를 찾을 수 없습니다"));
 
-        // 조회수 증가
         jobPostingRepository.incrementViewCount(jobId);
 
         return convertToResponse(jobPosting);
     }
 
     /**
-     * 공고 등록
+     * 공고 등록 - 캐시 초기화
      */
     @Transactional
+    @CacheEvict(value = "jobList", allEntries = true)
     public JobPostingResponse createJobPosting(JobPostingRequest request, Long companyId) {
         log.info("공고 등록 - companyId: {}, title: {}", companyId, request.getTitle());
 
@@ -106,10 +107,10 @@ public class JobPostingService {
                 .salaryMin(request.getSalaryMin())
                 .salaryMax(request.getSalaryMax())
                 .location(request.getLocation())
-                .locationCity(request.getLocationCity()) // 시/도 정보 추가
+                .locationCity(request.getLocationCity())
                 .description(request.getDescription())
-                .thumbnailUrl(request.getThumbnailUrl()) // 썸네일 URL 추가
-                .detailImageUrl(request.getDetailImageUrl()) // 상세 이미지 URL 추가
+                .thumbnailUrl(request.getThumbnailUrl())
+                .detailImageUrl(request.getDetailImageUrl())
                 .deadline(request.getDeadline())
                 .status(request.getStatus() != null && !request.getStatus().isEmpty() ?
                         JobPosting.Status.valueOf(request.getStatus().toUpperCase()) : JobPosting.Status.ACTIVE)
@@ -122,64 +123,31 @@ public class JobPostingService {
     }
 
     /**
-     * 공고 수정
+     * 공고 수정 - 캐시 초기화
      */
     @Transactional
-    public JobPostingResponse updateJobPosting(
-            Long jobId, JobPostingRequest request, Long companyId) {
-
+    @CacheEvict(value = {"jobList", "jobDetail"}, allEntries = true)
+    public JobPostingResponse updateJobPosting(Long jobId, JobPostingRequest request, Long companyId) {
         log.info("공고 수정 - jobId: {}, companyId: {}", jobId, companyId);
 
         JobPosting jobPosting = jobPostingRepository.findByJobIdAndCompanyId(jobId, companyId)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "공고를 찾을 수 없거나 수정 권한이 없습니다"));
+                .orElseThrow(() -> new IllegalArgumentException("공고를 찾을 수 없거나 수정 권한이 없습니다"));
 
-        // 수정할 필드만 업데이트
-        if (request.getTitle() != null) {
-            jobPosting.setTitle(request.getTitle());
-        }
-        if (request.getJobCategory() != null) {
-            jobPosting.setJobCategory(request.getJobCategory());
-        }
-        if (request.getRequiredSkills() != null) {
-            jobPosting.setRequiredSkills(request.getRequiredSkills());
-        }
-        if (request.getPreferredSkills() != null) {
-            jobPosting.setPreferredSkills(request.getPreferredSkills());
-        }
-        if (request.getExperienceMin() != null) {
-            jobPosting.setExperienceMin(request.getExperienceMin());
-        }
-        if (request.getExperienceMax() != null) {
-            jobPosting.setExperienceMax(request.getExperienceMax());
-        }
-        if (request.getSalaryMin() != null) {
-            jobPosting.setSalaryMin(request.getSalaryMin());
-        }
-        if (request.getSalaryMax() != null) {
-            jobPosting.setSalaryMax(request.getSalaryMax());
-        }
-        if (request.getLocation() != null) {
-            jobPosting.setLocation(request.getLocation());
-        }
-        if (request.getLocationCity() != null) {
-            jobPosting.setLocationCity(request.getLocationCity());
-        }
-        if (request.getDescription() != null) {
-            jobPosting.setDescription(request.getDescription());
-        }
-        if (request.getThumbnailUrl() != null) {
-            jobPosting.setThumbnailUrl(request.getThumbnailUrl());
-        }
-        if (request.getDetailImageUrl() != null) {
-            jobPosting.setDetailImageUrl(request.getDetailImageUrl());
-        }
-        if (request.getDeadline() != null) {
-            jobPosting.setDeadline(request.getDeadline());
-        }
-        if (request.getStatus() != null) {
-            jobPosting.setStatus(JobPosting.Status.valueOf(request.getStatus()));
-        }
+        if (request.getTitle() != null) jobPosting.setTitle(request.getTitle());
+        if (request.getJobCategory() != null) jobPosting.setJobCategory(request.getJobCategory());
+        if (request.getRequiredSkills() != null) jobPosting.setRequiredSkills(request.getRequiredSkills());
+        if (request.getPreferredSkills() != null) jobPosting.setPreferredSkills(request.getPreferredSkills());
+        if (request.getExperienceMin() != null) jobPosting.setExperienceMin(request.getExperienceMin());
+        if (request.getExperienceMax() != null) jobPosting.setExperienceMax(request.getExperienceMax());
+        if (request.getSalaryMin() != null) jobPosting.setSalaryMin(request.getSalaryMin());
+        if (request.getSalaryMax() != null) jobPosting.setSalaryMax(request.getSalaryMax());
+        if (request.getLocation() != null) jobPosting.setLocation(request.getLocation());
+        if (request.getLocationCity() != null) jobPosting.setLocationCity(request.getLocationCity());
+        if (request.getDescription() != null) jobPosting.setDescription(request.getDescription());
+        if (request.getThumbnailUrl() != null) jobPosting.setThumbnailUrl(request.getThumbnailUrl());
+        if (request.getDetailImageUrl() != null) jobPosting.setDetailImageUrl(request.getDetailImageUrl());
+        if (request.getDeadline() != null) jobPosting.setDeadline(request.getDeadline());
+        if (request.getStatus() != null) jobPosting.setStatus(JobPosting.Status.valueOf(request.getStatus()));
 
         jobPosting = jobPostingRepository.save(jobPosting);
         log.info("공고 수정 완료 - jobId: {}", jobPosting.getJobId());
@@ -188,17 +156,16 @@ public class JobPostingService {
     }
 
     /**
-     * 공고 삭제 (상태를 CLOSED로 변경)
+     * 공고 삭제 - 캐시 초기화
      */
     @Transactional
+    @CacheEvict(value = {"jobList", "jobDetail"}, allEntries = true)
     public void deleteJobPosting(Long jobId, Long companyId) {
         log.info("공고 삭제 - jobId: {}, companyId: {}", jobId, companyId);
 
         JobPosting jobPosting = jobPostingRepository.findByJobIdAndCompanyId(jobId, companyId)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "공고를 찾을 수 없거나 삭제 권한이 없습니다"));
+                .orElseThrow(() -> new IllegalArgumentException("공고를 찾을 수 없거나 삭제 권한이 없습니다"));
 
-        // 상태를 CLOSED로 변경
         jobPosting.setStatus(JobPosting.Status.CLOSED);
         jobPostingRepository.save(jobPosting);
 
@@ -206,18 +173,16 @@ public class JobPostingService {
     }
 
     /**
-     * 공고 상태 변경
+     * 공고 상태 변경 - 캐시 초기화
      */
     @Transactional
+    @CacheEvict(value = {"jobList", "jobDetail"}, allEntries = true)
     public void updateJobPostingStatus(Long jobId, Long companyId, String status) {
-        log.info("공고 상태 변경 - jobId: {}, companyId: {}, status: {}", 
-                jobId, companyId, status);
+        log.info("공고 상태 변경 - jobId: {}, companyId: {}, status: {}", jobId, companyId, status);
 
         JobPosting jobPosting = jobPostingRepository.findByJobIdAndCompanyId(jobId, companyId)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "공고를 찾을 수 없거나 권한이 없습니다"));
+                .orElseThrow(() -> new IllegalArgumentException("공고를 찾을 수 없거나 권한이 없습니다"));
 
-        // 상태 변경
         jobPosting.setStatus(JobPosting.Status.valueOf(status.toUpperCase()));
         jobPostingRepository.save(jobPosting);
 
@@ -239,12 +204,9 @@ public class JobPostingService {
     }
 
     private JobPostingListResponse convertToListResponse(JobPosting jobPosting) {
-        // 실제 데이터베이스에서 지원자 수 조회
         Long actualApplicantCount = applyRepository.countByJobId(jobPosting.getJobId());
-        // 실제 데이터베이스에서 북마크 수 조회
         Long actualBookmarkCount = bookmarkRepository.countByJobPostingId(jobPosting.getJobId());
 
-        // Company 정보 조회
         String companyName = "회사명";
         String logoUrl = null;
         try {
@@ -272,7 +234,7 @@ public class JobPostingService {
                 .experienceMax(jobPosting.getExperienceMax())
                 .salaryMin(jobPosting.getSalaryMin())
                 .salaryMax(jobPosting.getSalaryMax())
-                .description(jobPosting.getDescription()) // ✅ 추가: 상세 설명 매핑
+                .description(jobPosting.getDescription())
                 .deadline(jobPosting.getDeadline())
                 .status(jobPosting.getStatus().name())
                 .viewCount(jobPosting.getViewCount())
@@ -283,15 +245,9 @@ public class JobPostingService {
     }
 
     private JobPostingResponse convertToResponse(JobPosting jobPosting) {
-        // 실제 데이터베이스에서 지원자 수 조회
         Long actualApplicantCount = applyRepository.countByJobId(jobPosting.getJobId());
-        // 실제 데이터베이스에서 북마크 수 조회
         Long actualBookmarkCount = bookmarkRepository.countByJobPostingId(jobPosting.getJobId());
 
-        log.debug("공고 상세 변환 - jobId: {}, 실제 지원자 수: {}, 실제 북마크 수: {}",
-                jobPosting.getJobId(), actualApplicantCount, actualBookmarkCount);
-
-        // Company 정보 조회
         String companyName = "회사명";
         String logoUrl = null;
         try {
@@ -318,10 +274,10 @@ public class JobPostingService {
                 .salaryMin(jobPosting.getSalaryMin())
                 .salaryMax(jobPosting.getSalaryMax())
                 .location(jobPosting.getLocation())
-                .locationCity(jobPosting.getLocationCity()) // 시/도 정보 추가
+                .locationCity(jobPosting.getLocationCity())
                 .description(jobPosting.getDescription())
-                .thumbnailUrl(jobPosting.getThumbnailUrl()) // 썸네일 URL 추가
-                .detailImageUrl(jobPosting.getDetailImageUrl()) // 상세 이미지 URL 추가
+                .thumbnailUrl(jobPosting.getThumbnailUrl())
+                .detailImageUrl(jobPosting.getDetailImageUrl())
                 .deadline(jobPosting.getDeadline())
                 .status(jobPosting.getStatus().name())
                 .viewCount(jobPosting.getViewCount())

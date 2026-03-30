@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.io.Serializable;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -12,7 +13,9 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class JobPostingListResponse {
+public class JobPostingListResponse implements Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     private Long jobId;
     private Long companyId;
@@ -20,15 +23,15 @@ public class JobPostingListResponse {
     private String companyName;
     private String logoUrl;
     private String thumbnailUrl;
-    private String detailImageUrl; // ✅ 상세 이미지 URL
+    private String detailImageUrl;
     private String jobCategory;
     private String location;
-    private String locationCity; // 시/도 정보 (필터링용)
+    private String locationCity;
     private Integer experienceMin;
     private Integer experienceMax;
     private Integer salaryMin;
     private Integer salaryMax;
-    private String description; // ✅ 추가: 상세 설명
+    private String description;
     private LocalDate deadline;
     private String status;
     private Integer viewCount;

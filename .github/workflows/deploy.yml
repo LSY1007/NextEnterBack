@@ -41,7 +41,5 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            pkill -f 'java -jar' || true
-            sleep 3
-            setsid nohup java -jar /home/ubuntu/codeQuery-0.0.1-SNAPSHOT.jar > /home/ubuntu/back.log 2>&1 < /dev/null &
+            sudo systemctl restart nextenter
             echo "배포 완료!"

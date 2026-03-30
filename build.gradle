@@ -41,6 +41,9 @@ dependencies {
 // Redis
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 
+// Jackson JavaTimeModule (LocalDate/LocalDateTime 직렬화)
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+
 // 이메일
     implementation 'org.springframework.boot:spring-boot-starter-mail'
 
@@ -87,13 +90,11 @@ tasks.named('test') {
     maxParallelForks = 2
 }
 
-// 컴파일 옵션
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
     options.compilerArgs << '-parameters'
 }
 
-// 빌드 로깅
 gradle.taskGraph.whenReady { graph ->
     if (graph.hasTask(build)) {
         println "🔨 codeQuery 빌드 시작 (Java 21)"

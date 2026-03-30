@@ -15,5 +15,6 @@ out/
 .gradle/
 bin/
 src/main/resources/application-local.properties
+src/main/resources/application.properties
 # Local-only Lombok warning suppression
 lombok.config

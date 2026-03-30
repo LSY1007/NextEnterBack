@@ -2,12 +2,9 @@ package org.zerock.nextenter.job.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.zerock.nextenter.apply.repository.ApplyRepository;
@@ -18,8 +15,9 @@ import org.zerock.nextenter.job.dto.JobPostingResponse;
 import org.zerock.nextenter.job.entity.JobPosting;
 import org.zerock.nextenter.job.repository.BookmarkRepository;
 import org.zerock.nextenter.job.repository.JobPostingRepository;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.CacheEvict;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -33,59 +31,22 @@ public class JobPostingService {
     private final ApplyRepository applyRepository;
     private final BookmarkRepository bookmarkRepository;
     private final org.zerock.nextenter.company.repository.CompanyRepository companyRepository;
+    private final JobPostingCacheService jobPostingCacheService;
 
     /**
-     * 공고 목록 조회 - Redis 캐싱 (직렬화 가능한 래퍼 사용)
+     * 공고 목록 조회 - CacheService를 통해 Redis 캐싱
      */
     public Page<JobPostingListResponse> getJobPostingList(
             String jobCategories, String regions, String keyword, String status, int page, int size) {
 
-        JobPostingPageResponse cached = getCachedJobList(jobCategories, regions, keyword, status, page, size);
+        JobPostingPageResponse cached = jobPostingCacheService.getCachedJobList(
+                jobCategories, regions, keyword, status, page, size);
+
         return new PageImpl<>(
                 cached.getContent(),
                 PageRequest.of(cached.getPage(), cached.getSize()),
                 cached.getTotalElements()
         );
-    }
-
-    @Cacheable(value = "jobList", key = "#jobCategories + '_' + #regions + '_' + #keyword + '_' + #status + '_' + #page + '_' + #size")
-    public JobPostingPageResponse getCachedJobList(
-            String jobCategories, String regions, String keyword, String status, int page, int size) {
-
-        log.info("[CACHE MISS] 공고 목록 DB 조회 - status: {}, page: {}, size: {}", status, page, size);
-
-        Pageable pageable = PageRequest.of(page, size);
-
-        List<String> categoryList = (jobCategories != null && !jobCategories.isEmpty())
-                ? Arrays.asList(jobCategories.split(",")) : null;
-
-        List<String> regionList = (regions != null && !regions.isEmpty())
-                ? Arrays.asList(regions.split(",")) : null;
-
-        JobPosting.Status statusEnum = null;
-        if (status != null && !status.isEmpty()) {
-            try {
-                statusEnum = JobPosting.Status.valueOf(status.toUpperCase());
-            } catch (IllegalArgumentException e) {
-                log.warn("유효하지 않은 status 값: {}", status);
-            }
-        }
-
-        Page<JobPosting> jobPage = jobPostingRepository.searchByFiltersWithRegionLike(
-                categoryList, regionList, keyword, statusEnum, pageable);
-
-        List<JobPostingListResponse> content = jobPage.getContent().stream()
-                .map(this::convertToListResponse)
-                .collect(Collectors.toList());
-
-        return JobPostingPageResponse.builder()
-                .content(content)
-                .page(page)
-                .size(size)
-                .totalElements(jobPage.getTotalElements())
-                .totalPages(jobPage.getTotalPages())
-                .last(jobPage.isLast())
-                .build();
     }
 
     /**
@@ -108,7 +69,6 @@ public class JobPostingService {
      * 공고 등록 - 캐시 초기화
      */
     @Transactional
-    @CacheEvict(value = "jobList", allEntries = true)
     public JobPostingResponse createJobPosting(JobPostingRequest request, Long companyId) {
         log.info("공고 등록 - companyId: {}, title: {}", companyId, request.getTitle());
 
@@ -133,6 +93,7 @@ public class JobPostingService {
                 .build();
 
         jobPosting = jobPostingRepository.save(jobPosting);
+        jobPostingCacheService.evictAllCaches();
         log.info("공고 등록 완료 - jobId: {}", jobPosting.getJobId());
 
         return convertToResponse(jobPosting);
@@ -142,7 +103,6 @@ public class JobPostingService {
      * 공고 수정 - 캐시 초기화
      */
     @Transactional
-    @CacheEvict(value = {"jobList", "jobDetail"}, allEntries = true)
     public JobPostingResponse updateJobPosting(Long jobId, JobPostingRequest request, Long companyId) {
         log.info("공고 수정 - jobId: {}, companyId: {}", jobId, companyId);
 
@@ -166,6 +126,7 @@ public class JobPostingService {
         if (request.getStatus() != null) jobPosting.setStatus(JobPosting.Status.valueOf(request.getStatus()));
 
         jobPosting = jobPostingRepository.save(jobPosting);
+        jobPostingCacheService.evictAllCaches();
         log.info("공고 수정 완료 - jobId: {}", jobPosting.getJobId());
 
         return convertToResponse(jobPosting);
@@ -175,7 +136,6 @@ public class JobPostingService {
      * 공고 삭제 - 캐시 초기화
      */
     @Transactional
-    @CacheEvict(value = {"jobList", "jobDetail"}, allEntries = true)
     public void deleteJobPosting(Long jobId, Long companyId) {
         log.info("공고 삭제 - jobId: {}, companyId: {}", jobId, companyId);
 
@@ -184,6 +144,7 @@ public class JobPostingService {
 
         jobPosting.setStatus(JobPosting.Status.CLOSED);
         jobPostingRepository.save(jobPosting);
+        jobPostingCacheService.evictAllCaches();
         log.info("공고 삭제 완료 - jobId: {}", jobId);
     }
 
@@ -191,7 +152,6 @@ public class JobPostingService {
      * 공고 상태 변경 - 캐시 초기화
      */
     @Transactional
-    @CacheEvict(value = {"jobList", "jobDetail"}, allEntries = true)
     public void updateJobPostingStatus(Long jobId, Long companyId, String status) {
         log.info("공고 상태 변경 - jobId: {}, companyId: {}, status: {}", jobId, companyId, status);
 
@@ -200,6 +160,7 @@ public class JobPostingService {
 
         jobPosting.setStatus(JobPosting.Status.valueOf(status.toUpperCase()));
         jobPostingRepository.save(jobPosting);
+        jobPostingCacheService.evictAllCaches();
         log.info("공고 상태 변경 완료 - jobId: {}, newStatus: {}", jobId, status);
     }
 

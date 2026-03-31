@@ -4,6 +4,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
@@ -21,7 +22,9 @@ import java.util.Map;
 @Slf4j
 public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler {
 
-
+        // application.properties에서 주입. 없으면 기본값으로 배포 URL 사용
+        @Value("${app.oauth2.redirect-url:https://nextenter.store}")
+        private String frontendUrl;
 
         @Override
         public void onAuthenticationSuccess(HttpServletRequest request,
@@ -37,18 +40,19 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
                 Map<String, Object> claims = new HashMap<>();
                 claims.put("userId", oAuth2User.getUserId());
                 claims.put("email", oAuth2User.getEmail());
-                claims.put("name", oAuth2User.getName()); // ✅ name도 JWT에 포함
+                claims.put("name", oAuth2User.getName());
                 claims.put("type", "USER");
 
                 String token = JWTUtil.generateToken(claims, 1440);
 
-                // ✅ URL 인코딩 추가
+                // URL 인코딩
                 String encodedEmail = URLEncoder.encode(oAuth2User.getEmail(), StandardCharsets.UTF_8);
                 String encodedName = URLEncoder.encode(oAuth2User.getName(), StandardCharsets.UTF_8);
 
                 // 프론트엔드로 리다이렉트 (토큰 포함)
                 String redirectUrl = String.format(
-                                "http://localhost:5173/oauth2/redirect?token=%s&email=%s&name=%s",
+                                "%s/oauth2/redirect?token=%s&email=%s&name=%s",
+                                frontendUrl,
                                 token,
                                 encodedEmail,
                                 encodedName);
